@@ -151,8 +151,8 @@ for z=2:length(S)
         loo_in_st = find(loo_ndx == st_ndx);
         loo_tm(iter_ndx) = Ts(t);
         if(~isempty(loo_in_st))
-            loo_tgt(iter_ndx) = loo_sd.fm10(times(loo_in_st));
             loo_sd = sds{loo_ndx};
+            loo_tgt(iter_ndx) = loo_sd.fm10(times(loo_in_st));
             stt = times(loo_in_st);
             y_loo = [ms(loo_ndx,2),1,loo_sd.elevation,loo_sd.rain(stt)]';
             y_loo = y_loo(1:size(X,2));

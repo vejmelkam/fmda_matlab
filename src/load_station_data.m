@@ -38,10 +38,24 @@ function sd = load_station_data(station,year,R)
     [tdays34,map3,map4] = intersect(tdays3,tdays4);
     [tdays,map2,map34] = intersect(tdays2,tdays34);
     
-    % assign nan if no observation present or the fm10 observation so that
+    % assigns nan if no observation present or the fm10 observation so that
     % fm10/fm10_var is matched with relh,t2,accp
     fm10 = assign_via_tdays(tdays1,fm10_in(:,7),tdays);
     fm10_var = assign_via_tdays(tdays1,fm10_in(:,8),tdays);
+    
+    % remove any zero observations
+    fm10_var(fm10==0) = nan;
+    fm10(fm10==0) = nan;
+    
+    % finds maximum and if it is in the dataset more than once, marks it as
+    % a no observation (since these may be strongly censored)
+    % alternative strategy: increase the variance of the observation
+    % markedly
+    mx = max(fm10(isfinite(fm10)));
+    if(sum(fm10==mx) > 1)
+        fm10_var(fm10==mx) = nan;
+        fm10(fm10==mx) = nan;
+    end
     
     % process the observations
     relh = relh_in(map2,7);

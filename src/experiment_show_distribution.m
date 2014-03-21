@@ -55,7 +55,7 @@ function experiment_show_distribution(station_code,year,R)
     ylabel('fm10 [-]');
     
     fm10_mx = max(sd.fm10(have_fm10));
-    fprintf('Maximum fm10: %g, count in dataset %d\n', fm10_mx,sum(sd.fm10==fm10_mx));
+    fprintf('%s: max fm10: %g, count in dataset %d, zero fm10 %d\n', sd.stid, fm10_mx,sum(sd.fm10==fm10_mx),sum(sd.fm10==0));
     
 
     

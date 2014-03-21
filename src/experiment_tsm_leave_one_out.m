@@ -45,7 +45,7 @@ for z=1:length(S)
         sts_per_time(t) = Nst;
         times = ndxs(st_ndx);
 
-        if((length(st_ndx) > 30) && any(st_ndx == loo_ndx))
+        if((length(st_ndx) > 3) && any(st_ndx == loo_ndx))
             % find our left-out station in the array
             loo_in_st = find(loo_ndx == st_ndx);
             loo_sd = sds{loo_ndx};
@@ -69,12 +69,24 @@ for z=1:length(S)
                 Z(rmap(o)) = std.fm10(stt);
                 G(rmap(o)) = std.fm10_var(stt);
             end
+            
             if(all(X(:,4)==0))
                 X = X(:,1:3);
                 y_loo = y_loo(1:3);
             end
+            
+            % if there are less observations than regressors, reduce the number of
+            % regressors to the number of observations
+            if(size(X,2) > size(X,1))
+                X = X(:,1:size(X,1));
+            end            
+            
             [beta,sigma2] = estimate_tsm_parameters(X,Z,G);
             [betac,sigma2c] = estimate_tsm_parameters_constr(X,Z,G,[X;y_loo']);
+            if(isnan(sigma2c))
+                sigma2c = sigma2;
+                betac = beta;
+            end
             betas(iter_ndx) = beta(1);
             betasc(iter_ndx) = betac(1);
 
@@ -175,13 +187,23 @@ for z=1:length(S)
         
         close all;
 
+        % report
+        valids = find(isfinite(loo_tgt));
+        Nt = length(valids);
+        fprintf('Station: %s LS/MAPE: %g  LS/MSE: %g  CLS/MAPE: %g   CLS/MSE: %g\n', ...
+                station_code, norm(loo_tgt(valids)-loo_tsm(valids),1)/Nt, ...
+                norm(loo_tgt(valids)-loo_tsm(valids),2)/Nt, ...
+                norm(loo_tgt(valids)-loo_tsmc(valids),1)/Nt, ...
+                norm(loo_tgt(valids)-loo_tsmc(valids),2)/Nt);
+
+        % dump the results to file
+        sdsz = sds{z};
+        save([station_code,'.mat'],'loo_tm','loo_tsm','loo_tsmc','loo_tgt','betas', 'betasc','sdsz','loo_var','loo_varc');
+        
+    else
+        fprintf('Not enough valid points for station %s\n', station_code);
     end
     
-    % report
-    Nt = iter_ndx - 1;
-    fprintf('Station: %s LS/MAPE: %g  LS/MSE: %g  CLS/MAPE: %g   CLS/MSE: %g\n', ...
-            station_code, norm(loo_tgt-loo_tsm,1)/Nt, norm(loo_tgt-loo_tsm,2)/Nt, ...
-            norm(loo_tgt-loo_tsmc,1)/Nt, norm(loo_tgt-loo_tsmc,2)/Nt);
     
 end
 

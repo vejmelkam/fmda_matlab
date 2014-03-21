@@ -5,7 +5,7 @@
 %
 
 % Load station data & compute equilibria
-station = 'BAWC2';
+station = 'ESPC2';
 yr = '2012';
 sd = load_station_data(station,yr,[2400,4800]);
 tdays = sd.tdays - sd.tdays(1);
@@ -18,6 +18,7 @@ do_assim = false(N,1);
 do_assim(1:12:N) = true;
 
 % number of fuels and extended model size
+Tk = [1,10,100]';
 k = 3;
 M = k+2;
 
@@ -58,7 +59,6 @@ sK = zeros(N, M);
 trS = zeros(N, 1);
 trJ = zeros(N, 1);
 sP = zeros(N, M, M);
-sJ = zeros(N, M, M);
 
 % predict & update 0loop
 for i=2:N
@@ -69,48 +69,25 @@ for i=2:N
     Ew2 = (Ew(i)+Ew(i-1))/2;
     
     % compute & store results for system without Kalman filtering
-    m_n(i, :) = moisture_model_ext([1,10,100]',Ed2,Ew2,m_n(i-1,:)',sd.rain(i),dt,1e10);
+    m_n(i, :) = moisture_model_ext(Tk,Ed2,Ew2,m_n(i-1,:)',sd.rain(i),dt,1e10);
     
     % compute & store results for system without Kalman filtering but with
     % initial dE & dS correction
-    m_c(i, :) = moisture_model_ext([1,10,100]',Ed2,Ew2,m_c(i-1,:)',sd.rain(i),dt,1e10);
+    m_c(i, :) = moisture_model_ext(Tk,Ed2,Ew2,m_c(i-1,:)',sd.rain(i),dt,1e10);
 
     % KALMAN PREDICT STEP
-    
     % estimate new moisture mean based on last best guess (m)
-    [m_pred, model_ids(i,:)] = moisture_model_ext([1,10,100]',Ed2,Ew2,m_f(i-1,:)',sd.rain(i),dt,1e10);
-    
-    % update covariance matrix using the tangent linear model
-    Jm = moisture_tangent_model_ext([1,10,100]',Ew2,Ed2,m_f(i-1,:)',sd.rain(i),dt,1e10);
-    sJ(i, :, :) = Jm;
-    P = Jm*P*Jm' + Qphr*dt/3600;
+    [m_pred,P,J,model_ids(i,:)] = ekf_forecast(Tk,Ed2,Ew2,m_f(i-1,:)',sd.rain(i),dt,1e10,P,Qphr);
     sP(i, :, :) = P;
-    %trP(i) = trace(P);
     trP(i) = prod(eig(P(1:k,1:k)));
-    trJ(i) = prod(eig(Jm));
+    trJ(i) = prod(eig(J));
     
     % KALMAN UPDATE STEP (if measurement available) 
     if(do_assim(i))
         
-        % acquire current measurement & move to next one
-        m_measured = sd.fm10(i);
-        R = sd.fm10_var(i);
-
-        % innovation covariance
-        S = H*P*H' + R;
+        [m_f(i,:),P,K,S] = ekf_update(m_pred,P,H,sd.fm10(i),sd.fm10_var(i));
         trS(i) = prod(eig(S));
-        
-        % Kalman gain is inv(S) * P for this case (direct observation)
-        K = P * H' / S;
         sK(i,:) = K;
-        %trK(i) = prod(eig(K(1:k,1:k)));
-        
-        % update step of Kalman filter to shift model state
-        m_f(i,:) = m_pred + K*(m_measured - H*m_pred);
-        
-        % state error covariance is reduced by the observation
-        P_red = K*S*K';
-        P = P - P_red;
     
     else
         

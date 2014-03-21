@@ -13,9 +13,16 @@ function beta = cls(X,z,s_max,Xe)
     
     % initial conditions
     x = ones(k,1) * 0.01;
-    x(3) = mean(z);
     l = ones(m,1) * 0.01;
     s = ones(m,1) * 0.01;
+    
+    % check if any column is the constant factor
+    for i=1:k
+        if(all(X(:,i)==X(1,i)))
+            x(i) = mean(z)/X(1,i);
+            break;
+        end
+    end
     
     % numerical tolerance
     tol = max(1024, sqrt(n)) * eps;

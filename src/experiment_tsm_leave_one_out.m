@@ -6,7 +6,7 @@
 % model.  This is done via a leave-one-out testing strategy.
 %
 
-S = dir('../data/*fm10*');
+S = dir('../data/*fm10*2012*');
 N = length(S);
 year = '2012';
 base_tday = datenum(2012,1,1,0,0,0);
@@ -38,7 +38,8 @@ for z=1:length(S)
     iter_ndx = 1;
     for t=1:length(Ts)
 
-        ndxs = find_valid_obs(Ts(t),sds);
+        [ndxs,fm10o] = find_valid_obs(Ts(t),sds);
+        ndxs(isnan(fm10o)) = nan;
         st_ndx = find(isfinite(ndxs));
         Nst = length(st_ndx);
         sts_per_time(t) = Nst;
@@ -54,6 +55,9 @@ for z=1:length(S)
             y_loo = [0.5*(loo_sd.ew(stt)+loo_sd.ed(stt)),1,loo_sd.elevation,loo_sd.rain(stt)]';
 
             % construct regressors, observations and variances
+            if(Nst<10)
+                fprintf('TSM time %g building %d regressors.\n', Ts(t), Nst-1);
+            end
             X = zeros(Nst-1,4);
             Z = zeros(Nst-1,1); 
             G = zeros(Nst-1,1);
@@ -102,28 +106,36 @@ for z=1:length(S)
     
         f1 = figure();
         set(f1,'units','centimeters');
-        set(f1,'papersize',[16,8])        
-        set(f1,'paperposition',[0,0,16,8]);
+        set(f1,'papersize',[18,6])        
+        set(f1,'paperposition',[0,0,18,6]);
         
-        subplot(211);
+        subplot(311);
         plot([loo_tm,loo_tm,loo_tm],[loo_tgt,loo_tsm,loo_tsmc],'linewidth',1.2);
         legend('tgt', 'tsm', 'tsmc');
         title([sds{z}.stid,': Comparison between TSM fit (LS and CLS) and observation']);
         xlabel('Time [days from 1.1]');
         ylabel('fm10 [-]');
 
-        subplot(212);
-        plot([loo_tm,loo_tm,loo_tm],[abs(loo_tgt-loo_tsm),abs(loo_tgt-loo_tsmc),sqrt(loo_var)]);
-        title([sds{z}.stid,': TSM-obs error vs. TSM variance estimate']);
-        legend('ls: abs err', 'cls: abs err', 'stdev');
+        subplot(312);
+        plot([loo_tm,loo_tm],[abs(loo_tgt-loo_tsm),sqrt(loo_var)]);
+        title([sds{z}.stid,': TSM-obs error vs. LS/TSM variance estimate']);
+        legend('ls: abs err', 'ls: stdev');
         xlabel('Time [days from 1.1]');
         ylabel('fm10 [-]');
+
+        subplot(313);
+        plot([loo_tm,loo_tm],[abs(loo_tgt-loo_tsmc),sqrt(loo_varc)]);
+        title([sds{z}.stid,': TSM-obs error vs. CLS/TSM variance estimate']);
+        legend('cls: abs err', 'cls: stdev');
+        xlabel('Time [days from 1.1]');
+        ylabel('fm10 [-]');
+        
         print('-dpng', [station_code,'_tsm_vs_time']);
 
         f2 = figure();
         set(f2,'units','centimeters');
-        set(f2,'papersize',[18,6]);
-        set(f2,'paperposition',[0,0,18,6]);
+        set(f2,'papersize',[12,12]);
+        set(f2,'paperposition',[0,0,12,12]);
         
         subplot(221);
         plot(loo_tgt,loo_tsm, 'o', 'MarkerFaceColor',[0,0,0],'MarkerSize',5)
@@ -153,7 +165,7 @@ for z=1:length(S)
         ylabel('TSM fit [-]');
 
         subplot(224);
-        plot(abs(loo_tgt-loo_tsmc),sqrt(loo_var),'o', 'MarkerFaceColor',[0,0,0],'MarkerSize',5)
+        plot(abs(loo_tgt-loo_tsmc),sqrt(loo_varc),'o', 'MarkerFaceColor',[0,0,0],'MarkerSize',5)
         title([sds{z}.stid,': Abs. error vs. CLS TSM stdev estimate']);
         axis('square');
         xlabel('abs. error [-]');
@@ -164,6 +176,12 @@ for z=1:length(S)
         close all;
 
     end
+    
+    % report
+    Nt = iter_ndx - 1;
+    fprintf('Station: %s LS/MAPE: %g  LS/MSE: %g  CLS/MAPE: %g   CLS/MSE: %g\n', ...
+            station_code, norm(loo_tgt-loo_tsm,1)/Nt, norm(loo_tgt-loo_tsm,2)/Nt, ...
+            norm(loo_tgt-loo_tsmc,1)/Nt, norm(loo_tgt-loo_tsmc,2)/Nt);
     
 end
 

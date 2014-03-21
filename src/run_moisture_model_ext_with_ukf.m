@@ -6,9 +6,9 @@
 %
 
 % Load station data & compute equilibria
-station = 'BAWC2';
+station = 'ESPC2';
 yr = '2012';
-sd = load_station_data(station,yr);
+sd = load_station_data(station,yr,[2400,4800]);
 tdays = sd.tdays - sd.tdays(1);
 Ed = sd.ed;
 Ew = sd.ew;
@@ -20,6 +20,7 @@ do_assim(1:12:N) = true;
 
 % number of fuels and extended model size
 k = 3;
+Tk = [1,10,100]';
 M = k+2;
 
 % parameters of the simulation
@@ -80,69 +81,27 @@ for i = 2:N
     sigma_pts(i, :, :) = m_sigma;
     
     % compute & store results for system without KF
-    m_n(i, :) = moisture_model_ext([1,10,100]',Ed2,Ew2,m_n(i-1,:)',sd.rain(i),dt,1e10);
+    m_n(i, :) = moisture_model_ext(Tk,Ed2,Ew2,m_n(i-1,:)',sd.rain(i),dt,1e10);
     
     % compute & store results for corrected system without KF
-    m_c(i, :) = moisture_model_ext([1,10,100]',Ed2,Ew2,m_c(i-1,:)',sd.rain(i),dt,1e10);
+    m_c(i, :) = moisture_model_ext(Tk,Ed2,Ew2,m_c(i-1,:)',sd.rain(i),dt,1e10);
 
-    % UKF prediction step - run the sigma set through the nonlinear
-    % function
-    
-    % estimate new moisture mean based on last best guess (m)
-    m_sigma_i = zeros(M, Npts);
-    for n=1:Npts-1
-        m_sigma_i(:,n) = moisture_model_ext([1,10,100]',Ed2,Ew2,m_sigma(:,n),sd.rain(i),dt,1e10);
-    end
-    [m_sigma_i(:,Npts), model_ids(i,:)] = moisture_model_ext([1,10,100]',Ed2,Ew2,m_f(i-1,:)',sd.rain(i),dt,1e10);
-    
-    % compute the prediction mean x_mean(i|i-1)
-    m_pred = sum(m_sigma_i * diag(w), 2);
-    
-    % estimate covariance matrix using the sigma point set
-    sqrtP = (m_sigma_i - repmat(m_pred, 1, Npts)) * diag(sqrt(w));
-    P = Qphr*dt/3600 + sqrtP * sqrtP';
-    sP(i, :, :) = P;
-    trP(i) = abs(prod(eig(P)));
+    % UKF forecast
+    [mf,sqrtP,Pf] = ukf_forecast(Tk,Ed2,Ew2,m_f(i-1,:)',sd.rain(i),dt,1e10,P,Qphr);
     
     % KALMAN UPDATE STEP (if measurement available) 
     if(do_assim(i))
         
-        % acquire current measurement & move to next one
-        m_obs = sd.fm10(i);
-        R = sd.fm10_var(i);
-
-        % generate forecast-derived observation
-        y_pred_i = H * m_sigma_i;
-        y_pred = sum(y_pred_i * diag(w), 2);
+        [m_f(i,:),P,K,S] = ukf_update(mf,sqrtP,Pf,H,sd.fm10(i),sd.fm10_var(i));
         
-        % innovation covariance (H=I due to direct observation)
-        sqrtS = (y_pred_i - repmat(y_pred, 1, Npts)) * diag(sqrt(w));
-        S = sqrtS * sqrtS' + R; 
         trS(i) = prod(eig(S));
-        
-        % the cross covariance of state & observation errors
-        Cxy = sqrtP * sqrtS';
-        
-        % Kalman gain is inv(S) * P for this case (direct observation)
-        K = Cxy / S;
-        
-        %trK(i) = trace(K);
         sK(i,:) = K;
-        
-        % update step of Kalman filter to shift model state
-        m_f(i,:) = m_pred + K*(m_obs - y_pred);
-        
-        % state error covariance is reduced by the observation
-        P = P - K*S*K';
-    
-        % replace the stored covariance by the updated covariance after
-        % processing the measurement
         trP(i) = abs(prod(eig(P)));
         
     else
         
         % if no observation is available, store the predicted value
-        m_f(i,:) = m_pred;
+        m_f(i,:) = mf;
         
     end
         

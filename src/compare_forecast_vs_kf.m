@@ -22,6 +22,7 @@ function [tm,fm10s,m_ekfs,m_ukfs,m_nfs] = compare_forecast_vs_kf(sd,from,t_init,
     tm = tdays(from+1:from+t_init+t_fcast);
 
     % number of fuels and extended model size
+    Tk = [1,10,100]';
     k = 3;
     M = k+2;
     Npts = 2*M+1;
@@ -66,52 +67,19 @@ function [tm,fm10s,m_ekfs,m_ukfs,m_nfs] = compare_forecast_vs_kf(sd,from,t_init,
         dt = (tdays(from+i) - tdays(from+i-1)) * 86400;
         Ed2 = (Ed(from+i)+Ed(from+i-1))/2;
         Ew2 = (Ew(from+i)+Ew(from+i-1))/2;
-
-        % compute Jacobian for EKF
-        Jm = moisture_tangent_model_ext([1,10,100]',Ew2,Ed2,m_ekf,sd.rain(from+i),dt,1e10);
         
-        % run forecasts for EKF and for (no filtering) NF
-        m_ekf = moisture_model_ext([1,10,100]',Ed2,Ew2,m_ekf,sd.rain(from+i),dt,1e10);
-        m_nf  = moisture_model_ext([1,10,100]',Ed2,Ew2,m_nf,sd.rain(from+i),dt,1e10);
-
-        % run forecast for UKF
-        [m_sigma, w] = ukf_select_sigma_points(m_ukf,P_ukf,0);
-        m_sigma_i = zeros(M, Npts);
-        for n=1:Npts-1
-            m_sigma_i(:,n) = moisture_model_ext([1,10,100]',Ed2,Ew2,m_sigma(:,n),sd.rain(from+i),dt,1e10);
-        end
-        m_sigma_i(:,Npts) = moisture_model_ext([1,10,100]',Ed2,Ew2,m_ukf,sd.rain(from+i),dt,1e10);
-
-        % compute the prediction mean x_mean(i|i-1) for UKF
-        m_pred = sum(m_sigma_i * diag(w), 2);
-
-        % propagate  covariance through Jacobian (EKF)
-        P_ekf = Jm*P_ekf*Jm' + Qphr*dt/3600;
-        
-        % propagate covariance (UKF)
-        sqrtP = (m_sigma_i - repmat(m_pred, 1, Npts)) * diag(sqrt(w));
-        P_ukf = Qphr*dt/3600 + sqrtP * sqrtP';        
+        % run forecasts
+        m_nf  = moisture_model_ext(Tk,Ed2,Ew2,m_nf,sd.rain(from+i),dt,1e10);
+        [m_ekf,P_ekf] = ekf_forecast(Tk,Ed2,Ew2,m_ekf,sd.rain(from+i),dt,1e10,P_ekf,Qphr);
+        [m_ukf,sqrtP,P_ukf] = ukf_forecast(Tk,Ed2,Ew2,m_ukf,sd.rain(from+i),dt,1e10,P_ukf,Qphr);
 
         % retrieve observation
-        m_measured = sd.fm10(from+i);
-        R = sd.fm10_var(from+i);        
+        d = sd.fm10(from+i);
+        R = sd.fm10_var(from+i);
         
-        % do assimilation step for EKF
-        S = (H*P_ekf*H' + R);
-        K_ekf = P_ekf * H' / S;
-        m_ekf = m_ekf + K_ekf*(m_measured - H*m_ekf);
-        P_ekf = P_ekf - K_ekf*S*K_ekf';
-        
-        % do assimilation step for UKF
-        y_pred_i = H * m_sigma_i;
-        y_pred = sum(y_pred_i * diag(w), 2);
-        sqrtS = (y_pred_i - repmat(y_pred, 1, Npts)) * diag(sqrt(w));
-        S = sqrtS * sqrtS' + R; 
-        Cxy = (m_sigma_i - repmat(m_pred, 1, Npts)) * diag(w) * (y_pred_i - repmat(y_pred, 1, Npts))';
-        K_ukf = Cxy / S;
-        m_ukf = m_pred + K_ukf*(m_measured - y_pred);
-        P_ukf = P_ukf - K_ukf*S*K_ukf';
-        
+        [m_ekf,P_ekf] = ekf_update(m_ekf,P_ekf,H,d,R);
+        [m_ukf,P_ukf] = ukf_update(m_ukf,sqrtP,P_ukf,H,d,R);
+                
         m_ekfs(i) = m_ekf(2);
         m_ukfs(i) = m_ukf(2);
         m_nfs(i) = m_nf(2);
@@ -126,9 +94,9 @@ function [tm,fm10s,m_ekfs,m_ukfs,m_nfs] = compare_forecast_vs_kf(sd,from,t_init,
         Ed2 = (Ed(from+i)+Ed(from+i-1))/2;
         Ew2 = (Ew(from+i)+Ew(from+i-1))/2;
         
-        m_ekf = moisture_model_ext([1,10,100]',Ed2,Ew2,m_ekf,sd.rain(from+i),dt,1e10);
-        m_ukf = moisture_model_ext([1,10,100]',Ed2,Ew2,m_ukf,sd.rain(from+i),dt,1e10);
-        m_nf = moisture_model_ext([1,10,100]',Ed2,Ew2,m_nf,sd.rain(from+i),dt,1e10);
+        m_ekf = moisture_model_ext(Tk,Ed2,Ew2,m_ekf,sd.rain(from+i),dt,1e10);
+        m_ukf = moisture_model_ext(Tk,Ed2,Ew2,m_ukf,sd.rain(from+i),dt,1e10);
+        m_nf = moisture_model_ext(Tk,Ed2,Ew2,m_nf,sd.rain(from+i),dt,1e10);
         
         m_ekfs(i) = m_ekf(2);
         m_ukfs(i) = m_ukf(2);

@@ -14,9 +14,12 @@ function [beta,sigma2]=estimate_tsm_parameters(X,Z,gammas2)
 
     sigma2 = 0.0;
     sigma2_old = -10;
+    sigma2_old2 = -10;
     
-    while(abs(sigma2 - sigma2_old)/max(sigma2_old,1e-8) > 1e-3)
+    while((abs(sigma2 - sigma2_old)/max(sigma2_old,1e-8) > 1e-3) && ...
+          (abs(sigma2 - sigma2_old2)/max(sigma2_old2,1e-8) > 1e-3))
         
+        sigma2_old2 = sigma2_old;
         sigma2_old = sigma2;
 
         % transform into model with white unit variance errors and solve
@@ -29,7 +32,11 @@ function [beta,sigma2]=estimate_tsm_parameters(X,Z,gammas2)
 
         % compute residuals and re-estimate sigma2
         res2 = (Z - X*beta).^2;
-        sigma2 = bisect_solve(res2,gammas2,k);
+        if(N > k)
+            sigma2 = bisect_solve(res2,gammas2,k);
+        else
+            sigma2 = 0.0;
+        end
         
     end
     

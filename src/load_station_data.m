@@ -33,21 +33,27 @@ function sd = load_station_data(station,year,R)
     tdays3 = datenum(t2_in(:,1:6));
     tdays4 = datenum(accp_in(:,1:6));
     
-    % find the intersection
-    [tdays12,map1,map2] = intersect(tdays1,tdays2);
+    % find the intersection of all the weather data
+%    [tdays12,map1,map2] = intersect(tdays1,tdays2);
     [tdays34,map3,map4] = intersect(tdays3,tdays4);
-    [tdays,map12,map34] = intersect(tdays12,tdays34);
+    [tdays,map2,map34] = intersect(tdays2,tdays34);
+    
+    % assign nan if no observation present or the fm10 observation so that
+    % fm10/fm10_var is matched with relh,t2,accp
+    fm10 = assign_via_tdays(tdays1,fm10_in(:,7),tdays);
+    fm10_var = assign_via_tdays(tdays1,fm10_in(:,8),tdays);
     
     % process the observations
-    fm10 = fm10_in(map1(map12),7);
-    fm10_var = fm10_in(map1(map12),8);
-    relh = relh_in(map2(map12),7);
+    relh = relh_in(map2,7);
     t2   = t2_in(map3(map34),7);
     accp = accp_in(map4(map34),7);
     
     % chop to 1..N if desired
     if(nargin == 3)
-        if(numel(R) == 1)
+        if(numel(R) == 0)
+            From = 1;
+            To = length(tdays);
+        elseif(numel(R) == 1)
             From = 1;
             To = R;
         else

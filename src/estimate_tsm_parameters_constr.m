@@ -15,9 +15,11 @@ function [beta,sigma2]=estimate_tsm_parameters_constr(X,Z,gammas2,Xe)
     sigma2 = 0.0;
     sigma2_old = -10;
     sigma2_old2 = -10;
+    iter = 0;
     
     while((abs(sigma2 - sigma2_old)/max(sigma2_old,1e-8) > 1e-3) && ...
-          (abs(sigma2 - sigma2_old2)/max(sigma2_old2,1e-8) > 1e-3))
+          (abs(sigma2 - sigma2_old2)/max(sigma2_old2,1e-8) > 1e-3) && ...
+          iter < 10)
         
         sigma2_old2 = sigma2_old;
         sigma2_old = sigma2;
@@ -35,6 +37,13 @@ function [beta,sigma2]=estimate_tsm_parameters_constr(X,Z,gammas2,Xe)
         sigma2 = bisect_solve(res2,gammas2,k);
         
  %       fprintf('beta = [%s] sigma2=%g\n', num2str(beta'), sigma2);
-        
+        iter = iter + 1;
     end
+    
+    if(iter==10)
+        beta=nan;
+        sigma2=nan;
+        warning('failed to converge');
+    end
+    
     

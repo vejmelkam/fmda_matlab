@@ -8,9 +8,9 @@
 S = dir('../data/*fm10*');
 N = length(S);
 year = '2012';
-t_init = 6;
+t_init = 12;
 t_fcast = 48;
-test_step = 7;
+test_step = 12;
 
 all_ekfs = zeros(N,t_init+t_fcast);
 all_ukfs = zeros(N,t_init+t_fcast);

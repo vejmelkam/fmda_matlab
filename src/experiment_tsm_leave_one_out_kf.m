@@ -192,12 +192,14 @@ function out = experiment_tsm_leave_one_out_kf(station_start,station_skip)
                     stt = times(o);
                     xr = [ms(st_ndx(o),2),1,std.elevation,std.rain(stt)]';
                     xr = xr(1:size(X,2));
-                    % pseudo-observations are censored
-                    xpseudo = min(max(xr' * betac,0),2.5);
+
+                    % remove the part explained by the forecast
+                    xr(1) = 0;
+                    xpseudo = xr' * betac;
                     varpseudo = sigma2c + xr' * (XSXc\xr) + 1e-4;
                     Po = squeeze(P(o,:,:));
                     sqrtPo = squeeze(sqrtP(o,:,:));
-                    [ms(o,:),P(o,:,:)] = ukf_update(ms(o,:)',sqrtPo,Po,[0,1,0,0,0],xpseudo,varpseudo);
+                    [ms(o,:),P(o,:,:)] = ukf_update(ms(o,:)',sqrtPo,Po,[0,1-betac(1),0,0,0],xpseudo,varpseudo);
                     if(any(isnan(P(o,:,:))))
                         P(o,:,:)
                     end

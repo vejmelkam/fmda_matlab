@@ -48,7 +48,6 @@ function [sse,Ss,dEs,rks,r0s,Trks] = experiment_grid_search_parameters(year)
                                 % already computed
                                 continue;
                             end
-                            
                             fprintf('S=%g rk=%g r0=%g dE=%g Trk=%g', S,rk,r0,dE,Trk);
                             for i=1:Nst
                                 fprintf('.');
@@ -114,15 +113,23 @@ function [sse,Ss,dEs,rks,r0s,Trks] = experiment_grid_search_parameters(year)
 
         fprintf('Minimum reached for : S=%g rk=%g r0=%g dE=%g Trk=%g with error %g\n', Ss(i1),rks(i2),r0s(i3),dEs(i4),Trks(i5),sse(a));
 
+        % if any of the minima is reached at a boundary value, increase the
+        % boundary that way and continue
         done = true;
-        if(i1==length(Ss)), Ss = [Ss,Ss(end)+0.2]; s = size(sse); s(1) = s(1) + 1; sse2 = zeros(s); sse2(2:end,:,:,:,:) = sse; sse = sse2; done = false; end %#ok<AGROW>
-        if(i2==1 && rks(1) > 1), rks = [rks(1)-1,rks]; s = size(sse); s(2) = s(2) + 1; sse2 = zeros(s); sse2(:,2:end,:,:,:) = sse; sse = sse2; done = false; end %#ok<AGROW>
-        if(i2==length(rks)), rks = [rks,rks(end)+1]; s = size(sse); s(2) = s(2) + 1; sse2 = zeros(s); sse2(:,2:end,:,:,:) = sse; sse = sse2; done = false; end %#ok<AGROW>
-        if(i3==1 && r0s(1) > 0.02), r0s = [r0s(1)-0.02,r0s]; s = size(sse); s(3) = s(3) + 1; sse2 = zeros(s); sse2(:,:,2:end,:,:) = sse; sse = sse2; done = false; end %#ok<AGROW>
-        if(i3==length(r0s)), r0s = [r0s,r0s(end)+1]; s = size(sse); s(3) = s(3) + 1; sse2 = zeros(s); sse2(:,:,2:end,:,:) = sse; sse = sse2; done = false; end %#ok<AGROW>
-        if(i4==1), dEs = [dEs(1)-0.01,dEs]; s = size(sse); s(4) = s(4) + 1; sse2 = zeros(s); sse2(:,:,:,2:end,:) = sse; sse = sse2; done = false; end %#ok<AGROW>
-        if(i4==length(dEs)), dEs = [dEs,dEs(end)+0.01]; s = size(sse); s(4) = s(4) + 1; sse2 = zeros(s); sse2(:,:,:,2:end,:) = sse; sse = sse2; done = false; end %#ok<AGROW>
-        if(i5==1 && Trks(1) > 4), Trks = [Trks(1)-1,Trks]; s = size(sse); s(5) = s(5) + 1; sse2 = zeros(s); sse2(:,:,:,:,2:end) = sse; sse = sse2; done = false; end %#ok<AGROW>
-        if(i5==length(Trks)), Trks = [Trks,Trks(end)+1]; s = size(sse); s(5) = s(5) + 1; sse2 = zeros(s); sse2(:,:,:,:,2:end) = sse; sse = sse2; done = false; end %#ok<AGROW>
+        s = size(sse);
+        sse2 = zeros(s);
+        if(i1==length(Ss)), Ss = [Ss(2:end),Ss(end)+0.2]; sse2(1:end-1,:,:,:,:) = sse(2:end,:,:,:,:); sse = sse2; done = false; end
+        
+        if((i2==1) && (rks(1) > 1)), rks = [rks(1)-1,rks(1:end-1)]; sse2(:,2:end,:,:,:) = sse(:,1:end-1,:,:,:); sse = sse2; done = false; end
+        if(i2==length(rks)), rks = [rks(2:end),rks(end)+1]; sse2(:,1:end-1,:,:,:) = sse(:,2:end,:,:,:); sse = sse2; end
+        
+        if((i3==1) && (r0s(1) > 0.02)), r0s = [r0s(1)-0.02,r0s(1:end-1)]; sse2(:,:,2:end,:,:) = sse(:,:,1:end-1,:,:); sse = sse2; done = false; end
+        if(i3==length(r0s)), r0s = [r0s(2:end),r0s(end)+0.02]; sse2(:,:,1:end-1,:,:) = sse(:,:,2:end,:,:); sse = sse2; done = false; end
+        
+        if(i4==1), dEs = [dEs(1)-0.01,dEs(1:end-1)]; sse2(:,:,:,2:end,:) = sse(:,:,:,1:end-1,:); sse = sse2; done = false; end
+        if(i4==length(dEs)), dEs = [dEs(2:end),dEs(end)+0.01]; sse2(:,:,:,1:end-1,:) = sse(:,:,:,2:end,:); sse = sse2; done = false; end
+        
+        if((i5==1) && (Trks(1) > 4)), Trks = [Trks(1)-1,Trks(1:end-1)];sse2(:,:,:,:,2:end) = sse(:,:,:,:,1:end-1); sse = sse2; done = false; end
+        if(i5==length(Trks)), Trks = [Trks(2:end),Trks(end)+1]; sse2(:,:,:,:,1:end-1) = sse(:,:,:,:,2:end); sse = sse2; done = false; end
     end
     

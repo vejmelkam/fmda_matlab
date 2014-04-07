@@ -9,7 +9,7 @@
 %
 %         station - station code
 %         yr - 4digit year string
-%         R - either not present, or EndSample or [BeginSample,EndSample]
+%         R - either not present, [StartDay, EndDay]
 %
 
 function sd = load_station_data(station,year,R)
@@ -63,16 +63,17 @@ function sd = load_station_data(station,year,R)
     accp = accp_in(map4(map34),7);
     
     % chop to 1..N if desired
+    yr = str2num(year);
+    yr11 = datenum(yr,1,1);
     if(nargin == 3)
         if(numel(R) == 0)
             From = 1;
             To = length(tdays);
-        elseif(numel(R) == 1)
-            From = 1;
-            To = R;
+        elseif(numel(R) == 2)
+            From = find(tdays < R(1) + yr11,1,'last');
+            To = find(tdays > R(2) + yr11,1,'first');
         else
-            From = R(1);
-            To = R(2);
+            error('range not understood');
         end
         tdays = tdays(From:To);
         fm10 = fm10(From:To);

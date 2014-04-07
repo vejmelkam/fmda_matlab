@@ -62,7 +62,7 @@ function [m_ext, model_ids] = moisture_model_ext(Tk, Ed, Ew, m_ext, r, dt, assim
     if(r > r0)
         model_ids(:) = 3;
         rlags(1:k) = 1.0 / Trk .* (1 - exp(-(r - r0) / rk));
-        equi(1:k) = S + dlt_S;
+        equi(1:k) = max(S + dlt_S,0);
     else
         model_ids(:) = 4;
         rlags(1:k) = 1.0 ./ (Tk * 3600);

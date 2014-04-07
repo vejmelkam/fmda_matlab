@@ -14,7 +14,7 @@
 %
 %
 
-function [tm,fm10s,m_ekfs,m_ukfs,m_nfs] = compare_forecast_vs_kf(sd,from,t_init,t_fcast)
+function [tm,fm10s,m_ekfs,m_ukfs,m_nfs] = compare_forecast_vs_kf(sd,from,t_init,t_fcast,step)
 
     % pre-compute equilibrium moisture from station data
     [Ed,Ew] = equilibrium_moisture2(sd.relh,sd.t2);
@@ -77,9 +77,11 @@ function [tm,fm10s,m_ekfs,m_ukfs,m_nfs] = compare_forecast_vs_kf(sd,from,t_init,
         d = sd.fm10(from+i);
         R = sd.fm10_var(from+i);
         
-        [m_ekf,P_ekf] = ekf_update(m_ekf,P_ekf,H,d,R);
-        [m_ukf,P_ukf] = ukf_update(m_ukf,sqrtP,P_ukf,H,d,R);
-                
+        if(rem(i,step)==0)
+            [m_ekf,P_ekf] = ekf_update(m_ekf,P_ekf,H,d,R);
+            [m_ukf,P_ukf] = ukf_update(m_ukf,sqrtP,P_ukf,H,d,R);
+        end
+        
         m_ekfs(i) = m_ekf(2);
         m_ukfs(i) = m_ukf(2);
         m_nfs(i) = m_nf(2);

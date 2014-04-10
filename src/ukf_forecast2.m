@@ -3,9 +3,7 @@
 % Computes the model forecast using the UKF propagation rule.  Re-estimates
 % the forecast covariance as well.
 %
-% Implementation according to Simon,2010, pp 449-450.
-%
-% synopsis: [mf,sqrtP,Pf,mid] = ukf_forecast(Tk,Ed,Ew,m,r,dt,dcay,P,Qphr)
+% synopsis: [mf,sqrtP,Pf,mid] = ukf_forecast2(Tk,Ed,Ew,m,r,dt,dcay,P,Qphr,S,rk,r0,Trk)
 %
 %    ARGUMENTS
 %    Tk - time constants [hrs]
@@ -22,8 +20,8 @@
 %    sqrtP  - the square root of the forecast covariance (without process
 %    noise)
 %    Pf     - the forecast covariance
-
-function [mf,sqrtP,Pf] = ukf_forecast(Tk,Ed,Ew,m,r,dt,dcay,P,Qphr)
+%
+function [mf,sqrtP,Pf] = ukf_forecast2(Tk,Ed,Ew,m,r,dt,dcay,P,Qphr,S,rk,r0,Trk)
 
     M = size(m,1);
     Npts = 2*M;
@@ -32,11 +30,11 @@ function [mf,sqrtP,Pf] = ukf_forecast(Tk,Ed,Ew,m,r,dt,dcay,P,Qphr)
 
     f_sigma = zeros(M, Npts);
     for n=1:Npts
-        f_sigma(:,n) = moisture_model_ext(Tk,Ed,Ew,m_sigma(:,n),r,dt,dcay);
+        f_sigma(:,n) = moisture_model_ext2(Tk,Ed,Ew,m_sigma(:,n),r,dt,dcay,S,rk,r0,Trk);
     end
 
     % compute the prediction mean x_mean(i|i-1)
-    mf = mean(f_sigma, 2);
+    mf = 1/Npts*sum(f_sigma, 2);
     
     % FIXME: need to replace this by direct square root propagation
     sqrtP = (f_sigma - repmat(mf, 1, Npts));

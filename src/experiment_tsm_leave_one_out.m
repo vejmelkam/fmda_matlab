@@ -6,9 +6,9 @@
 % model.  This is done via a leave-one-out testing strategy.
 %
 
-S = dir('../data/*fm10*2012*');
-N = length(S);
 year = '2012';
+S = dir(['../data/*fm10*',year,'*']);
+N = length(S);
 base_tday = datenum(2012,1,1,0,0,0);
 sds = cell(N,1);
 max_tday = 0;

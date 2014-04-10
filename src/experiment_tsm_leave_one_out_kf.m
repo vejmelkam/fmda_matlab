@@ -8,14 +8,14 @@
 %  synopsis: out = experiment_tsm_leave_one_out_kf(station_start,station_skip)
 %
 
-function out = experiment_tsm_leave_one_out_kf(station_start,station_skip)
+function out = experiment_tsm_leave_one_out_kf(station_start,station_skip,year)
 
     % find all stations with data in 2012
-    S = dir('../data/*fm10*2012*');
+    years = num2str(year);
+    S = dir(['../data/*fm10*',years,'*']);
     N = length(S);
 
-    year = '2012';
-    base_tday = datenum(2012,1,1,0,0,0);
+    base_tday = datenum(year,1,1,0,0,0);
     sds = cell(N,1);
     max_tday = 0;
     
@@ -31,10 +31,10 @@ function out = experiment_tsm_leave_one_out_kf(station_start,station_skip)
     Qphr(1:k, 1:k) = diag([0.0005,0.00005,0.00001]);
     Qphr(k+1,k+1) = 0.0001;
     Qphr(k+2,k+2) = 0.0001;
-
+    
     % load all station data
     for i=1:N
-        sds{i} = load_station_data(S(i).name(1:5),year);
+        sds{i} = load_station_data(S(i).name(1:5),years);
         sds{i}.tdays = sds{i}.tdays - base_tday;
         max_tday = max(max_tday, sds{i}.tdays(end));
     end
@@ -53,14 +53,14 @@ function out = experiment_tsm_leave_one_out_kf(station_start,station_skip)
         betas    = zeros(numel(Ts),1);
         betasc   = zeros(numel(Ts),1);
         station_code = sds{z}.stid;
-        fprintf('Leaving out station: %s\n', station_code);
+        fprintf('Leaving out station %d: %s\n', z,station_code);
 
         % re-initialize all models
         m_init = false(N,1);
         m_lastt = zeros(N,1);
         ms = zeros(N,M);
         P = zeros(N,M,M);
-        sqrtP = zeros(N,M,2*M+1);
+        sqrtP = zeros(N,M,2*M);
         for i=1:N
             ndxs = find_valid_obs(120,sds(i));
             P(i,:,:) = 0.01 * eye(M);
@@ -74,7 +74,8 @@ function out = experiment_tsm_leave_one_out_kf(station_start,station_skip)
 
         % for each (hourly) timepoint in Ts
         iter_ndx = 1;
-        for t=1:length(Ts)
+        conv_failures = 0;
+        for t=2:length(Ts)
 
             % find stations that have (rel_humidity,air_temp,accum_precip)
             % observations valid for this time.  Additionally, read off their
@@ -86,8 +87,8 @@ function out = experiment_tsm_leave_one_out_kf(station_start,station_skip)
             times = ndxs(st_ndx);
             st_map = false(Nst,1);
 
-            if(rem(t,250)==0)
-                fprintf('t=%d\n', t);
+            if(rem(t,100)==0)
+                fprintf('%d ', t);
             end
 
             % if the model has an observation valid now, integrate the model
@@ -102,6 +103,15 @@ function out = experiment_tsm_leave_one_out_kf(station_start,station_skip)
                     dt = (Ts(t)-m_lastt(i))*86400;
                     Pi = squeeze(P(i,:,:));
                     [mi,sqrtPi,Pi] = ukf_forecast(Tk,ed,ew,ms(i,:)',ri,dt,1e10,Pi,Qphr);
+%                    [mi,Pi] = ekf_forecast(Tk,ed,ew,ms(i,:)',ri,dt,1e10,Pi,Qphr);
+                    if(any(isnan(Pi)))
+                        warning('nans found in forecast covariance');
+                        Pi
+                    end
+                    if(any(eig(Pi) < 0))
+                        Pi
+                        warning('negative eigenvalues in forecast covariance');
+                    end
                     ms(i,:) = mi';
                     sqrtP(i,:,:) = sqrtPi;
                     P(i,:,:) = Pi;
@@ -114,21 +124,27 @@ function out = experiment_tsm_leave_one_out_kf(station_start,station_skip)
                     st_map(si) = true;
                 end
             end
+            
+            % check for negative moistures
+            if(any(ms(:,1:3) < 0))
+                warning('Negative moistures found!');
+                ms
+            end
 
             % construct regressors, observations and variances: only use models
             % that have been integrated to this time point (marked in st_map).
             X = zeros(Nst,4);
             Z = zeros(Nst,1); 
             G = zeros(Nst,1);
-            ndx = 1;
+            Nobs = 0;
             for o=1:Nst
                 if(st_map(o) && isfinite(fm10o(st_ndx(o))))
                     std = sds{st_ndx(o)};
                     stt = times(o);
-                    X(ndx,:) = [ms(st_ndx(o),2),1,std.elevation,std.rain(stt)];
-                    Z(ndx) = fm10o(st_ndx(o));
-                    G(ndx) = fm10v(st_ndx(o));
-                    ndx = ndx + 1;
+                    Nobs = Nobs + 1;
+                    X(Nobs,:) = [ms(st_ndx(o),2),1,std.elevation/2000,std.rain(stt)];
+                    Z(Nobs) = fm10o(st_ndx(o));
+                    G(Nobs) = fm10v(st_ndx(o));
                 end
             end
 
@@ -139,9 +155,9 @@ function out = experiment_tsm_leave_one_out_kf(station_start,station_skip)
             end
 
             % only use the stations that we filled out (ndx-1)
-            X = X(1:ndx-1,:);
-            Z = Z(1:ndx-1,:);
-            G = G(1:ndx-1,:);
+            X = X(1:Nobs,:);
+            Z = Z(1:Nobs,:);
+            G = G(1:Nobs,:);
 
             % if there are less observations than regressors, reduce the number of
             % regressors to the number of observations
@@ -153,66 +169,111 @@ function out = experiment_tsm_leave_one_out_kf(station_start,station_skip)
             % if the constrained method does not converge, then replace its
             % result by the unconstrained solver (as it would in an operational
             % system)
-            [beta,sigma2] = estimate_tsm_parameters(X,Z,G);
-            [betac,sigma2c] = estimate_tsm_parameters_constr(X,Z,G,X);
-            if(isnan(sigma2c))
-                sigma2c = sigma2;
-                betac = beta;
-            end
-            betas(iter_ndx) = beta(1);
-            betasc(iter_ndx) = betac(1);
+            if(Nobs > 0)
+                loo_in_st = find(loo_ndx == st_ndx);
+                if(~isempty(loo_in_st))
+                    loo_tm(iter_ndx) = Ts(t);
+                    loo_sd = sds{loo_ndx};
+                    loo_tgt(iter_ndx) = loo_sd.fm10(times(loo_in_st));
+                    stt = times(loo_in_st);
+                    y_loo = [ms(loo_ndx,2),1,loo_sd.elevation/2000,loo_sd.rain(stt)]';
+                    Xe = [X;y_loo(1:size(X,2))'];
+                else
+                    Xe = X;
+                end
+                [beta,sigma2] = estimate_tsm_parameters(X,Z,G);
+                [betac,sigma2c] = estimate_tsm_parameters_constr(X,Z,G,Xe,0.6);
+                if(isnan(sigma2c))
+                    sigma2c = sigma2;
+                    betac = beta;
+                    conv_failures = conv_failures + 1;
+                end
+                betas(iter_ndx) = beta(1);
+                betasc(iter_ndx) = betac(1);
 
-            % 
-            XSX = (X'*diag(1./(sigma2+G))*X);
-            XSXc = (X'*diag(1./(sigma2c+G))*X);
-            % do the following (LOO testing) only if the left-out stations
-            % actually has at least valid weather observations here
-            % fm10 can still be unavailable, in which case loo_tgt(iter_ndx)
-            % becomes a nan
-            loo_in_st = find(loo_ndx == st_ndx);
-            loo_tm(iter_ndx) = Ts(t);
-            if(~isempty(loo_in_st))
-                loo_sd = sds{loo_ndx};
-                loo_tgt(iter_ndx) = loo_sd.fm10(times(loo_in_st));
-                stt = times(loo_in_st);
-                y_loo = [ms(loo_ndx,2),1,loo_sd.elevation,loo_sd.rain(stt)]';
-                y_loo = y_loo(1:size(X,2));
-                loo_tsm(iter_ndx) = y_loo' * beta;
-                loo_var(iter_ndx) = sigma2 + y_loo' * (XSX\y_loo);
-                loo_tsmc(iter_ndx) = y_loo' * betac;
-                loo_varc(iter_ndx) = sigma2c + y_loo' * (XSXc\y_loo);
-            else
-                loo_tgt(iter_ndx) = nan;
-            end
+                % compute X'Sigma^{-1}*X
+                XSX = (X'*diag(1./(sigma2+G))*X);
+                XSXc = (X'*diag(1./(sigma2c+G))*X);
 
-            % find regressors for all included stations
-            for o=1:Nst
-                if(st_map(o))
-                    std = sds{st_ndx(o)};
-                    stt = times(o);
-                    xr = [ms(st_ndx(o),2),1,std.elevation,std.rain(stt)]';
-                    xr = xr(1:size(X,2));
+                if(rcond(XSXc) < 1e-16)
+                    warning('XSXc is badly conditioned!');
+                    [X,Z,G]
+                end
+                % do the following (LOO testing) only if the left-out stations
+                % actually has at least valid weather observations here
+                % fm10 can still be unavailable, in which case loo_tgt(iter_ndx)
+                % becomes a nan
+                loo_in_st = find(loo_ndx == st_ndx);
+                loo_tm(iter_ndx) = Ts(t);
+                if(~isempty(loo_in_st))
+                    loo_sd = sds{loo_ndx};
+                    loo_tgt(iter_ndx) = loo_sd.fm10(times(loo_in_st));
+                    stt = times(loo_in_st);
+                    y_loo = [ms(loo_ndx,2),1,loo_sd.elevation/2000,loo_sd.rain(stt)]';
+                    y_loo = y_loo(1:size(X,2));
+                    loo_tsm(iter_ndx) = y_loo' * beta;
+                    loo_var(iter_ndx) = sigma2 + y_loo' * (XSX\y_loo);
+                    loo_tsmc(iter_ndx) = y_loo' * betac;
+                    loo_varc(iter_ndx) = sigma2c + y_loo' * (XSXc\y_loo);
+                else
+                    loo_tgt(iter_ndx) = nan;
+                end
 
-                    % remove the part explained by the forecast
-                    xr(1) = 0;
-                    xpseudo = xr' * betac;
-                    varpseudo = sigma2c + xr' * (XSXc\xr) + 1e-4;
-                    Po = squeeze(P(o,:,:));
-                    sqrtPo = squeeze(sqrtP(o,:,:));
-                    [ms(o,:),P(o,:,:)] = ukf_update(ms(o,:)',sqrtPo,Po,[0,1-betac(1),0,0,0],xpseudo,varpseudo);
-                    if(any(isnan(P(o,:,:))))
-                        P(o,:,:)
+                % find regressors for all included stations
+                for o=1:Nst
+                    if(st_map(o))
+                        std = sds{st_ndx(o)};
+                        stt = times(o);
+                        xr = [ms(st_ndx(o),2),1,std.elevation/2000,std.rain(stt)]';
+                        xr = xr(1:size(X,2));
+
+                        % remove the part explained by the forecast
+%                        xr(1) = 0;
+                        xpseudo = xr' * betac;
+                        varpseudo = sigma2c + xr' * (XSXc\xr) + 1e-3;
+                        Po = squeeze(P(o,:,:));
+                        sqrtPo = squeeze(sqrtP(o,:,:));
+                        [ms(o,:),P(o,:,:)] = ukf_update(ms(o,:)',sqrtPo,Po,[0,1,0,0,0],xpseudo,varpseudo);
+%                        [ms(o,:),P(o,:,:)] = ekf_update(ms(o,:)',Po,[0,1,0,0,0],xpseudo,varpseudo);
+    %                     if(o==1)
+    %                         fprintf('** status **\n');
+    %                         fprintf('%g ',ms(o,:));
+    %                         fprintf('\tpso:%g var:%g\n', xpseudo, varpseudo);
+    %                         fprintf('betas: ');
+    %                         fprintf('%g ', beta);
+    %                         fprintf('\nbetasc: ');
+    %                         fprintf('%g ', betac);
+    %                         fprintf('\n\n');
+    %                     end
+
+                        if(any(isnan(P(o,:,:))))
+                            warning('nans found in updated covariance');
+                            squeeze(P(o,:,:))
+                        end
+                        if(any(eig(squeeze(P(o,:,:))) < 0))
+                            warning('negative eigenvalues found in updated covariance');
+                            squeeze(P(o,:,:))
+                        end
                     end
                 end
+                
+                % check for negative moistures
+                if(any(ms(:,1:3) < 0))
+                    warning('negative moisture post-assimilation');
+                    ms
+                end
+                
+                % we have had an assimilation
+                iter_ndx = iter_ndx + 1;
+            else
+                fprintf('No observations at time %g\n', Ts(t));
             end
-
-            iter_ndx = iter_ndx + 1;
 
         end
 
-        % we censor loo_tsm to be between 0 and 2.5
+        % we censor loo_tsm to be between 0 and 0.6
         loo_tsm(loo_tsm < 0) = 0;
-        loo_tsm(loo_tsm > 2.5) = 2.5;
+        loo_tsm(loo_tsm > 0.6) = 0.6;
 
         loo_tgt = loo_tgt(1:iter_ndx-1);
         loo_tsm = loo_tsm(1:iter_ndx-1);
@@ -251,7 +312,7 @@ function out = experiment_tsm_leave_one_out_kf(station_start,station_skip)
             xlabel('Time [days from 1.1]');
             ylabel('fm10 [-]');
 
-            print('-dpng', [station_code,'_tsm_vs_time_kf']);
+            print('-dpng', [station_code,'_',years,'_tsm_vs_time_kf']);
 
             f2 = figure();
             set(f2,'units','centimeters');
@@ -292,22 +353,21 @@ function out = experiment_tsm_leave_one_out_kf(station_start,station_skip)
             xlabel('abs. error [-]');
             ylabel('stdev [-]');
 
-            print('-dpng', [station_code,'_tsm_scatters_kf']);
-
-            close all;
+            print('-dpng', [station_code,'_',years,'_tsm_scatters_kf']);
 
         end
 
         % report
         valids = find(isfinite(loo_tgt));
         Nt = length(valids);
-        fprintf('Station: %s LS/MAPE: %g  LS/MSE: %g  CLS/MAPE: %g   CLS/MSE: %g\n', ...
+        fprintf('\n\n*** report ***\n');
+        fprintf('Station: %s LS/MAPE: %g  LS/MSE: %g  CLS/MAPE: %g   CLS/MSE: %g  convergence failures: %d\n', ...
                 station_code, norm(loo_tgt(valids)-loo_tsm(valids),1)/Nt, norm(loo_tgt(valids)-loo_tsm(valids),2)/Nt, ...
-                norm(loo_tgt(valids)-loo_tsmc(valids),1)/Nt, norm(loo_tgt(valids)-loo_tsmc(valids),2)/Nt);
+                norm(loo_tgt(valids)-loo_tsmc(valids),1)/Nt, norm(loo_tgt(valids)-loo_tsmc(valids),2)/Nt, conv_failures);
         
         % dump the results to file
         sdsz = sds{z};
-        save([station_code,'.mat'],'loo_tm','loo_tsm','loo_tsmc','loo_tgt','betas', 'betasc','sdsz','loo_var','loo_varc');
+        save([station_code,'_',years,'_tsm_loo.mat'],'loo_tm','loo_tsm','loo_tsmc','loo_tgt','betas', 'betasc','sdsz','loo_var','loo_varc');
 
     end
 end

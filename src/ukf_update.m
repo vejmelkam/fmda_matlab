@@ -2,6 +2,8 @@
 %
 % Executes the UKF update step given the forecast and an observation.
 %
+% Implementation according to Simon,2010, pp 449-450.
+%
 %  synopsis: [ma,Pa,K,S] = ukf_update(mf,sqrtPf,H,d,R)
 %
 %  ARGUMENTS
@@ -21,21 +23,21 @@
 function [ma,Pa,K,S] = ukf_update(mf,sqrtP,Pf,H,d,R)
 
     M = size(mf,1);
-    Npts = 2*M+1;
+    Npts = 2*M;
     
     % generate new sigma points
-    [sigs, w] = ukf_select_sigma_points(mf, Pf, 0);
+    sigs = ukf_select_sigma_points(mf, Pf);
 
     % generate forecast-derived observation
     y_pred_i = H * sigs;
-    y_pred = sum(y_pred_i * diag(w), 2);
+    y_pred = mean(y_pred_i, 2);
 
     % innovation covariance (H=I due to direct observation)
-    sqrtS = (y_pred_i - repmat(y_pred, 1, Npts)) * diag(sqrt(w));
-    S = sqrtS * sqrtS' + R; 
+    sqrtS = y_pred_i - y_pred;
+    S = 1/Npts*(sqrtS * sqrtS') + R; 
 
     % the cross covariance of state & observation errors
-    Cxy = sqrtP * sqrtS';
+    Cxy = 1/Npts * sqrtP * sqrtS';
 
     % Kalman gain is inv(S) * P for this case (direct observation)
     K = Cxy / S;

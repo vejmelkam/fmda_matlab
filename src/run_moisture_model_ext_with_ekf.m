@@ -15,7 +15,7 @@ Ew = sd.ew;
 % time in hours (integration step for moisture is 1h)
 N = length(tdays);
 do_assim = false(N,1);
-do_assim(1:12:N) = true;
+do_assim(1:6:N) = true;
 
 % number of fuels and extended model size
 Tk = [1,10,100]';
@@ -38,17 +38,17 @@ Qphr(k+2,k+2) = 0.0001;
 H = zeros(1,M);
 H(1,2) = 1;
 
-% storage space for results (with filtering)
+% storage space for results (with filtering and parameter fitting)
 m_f = zeros(N, M);
 m_f(1, :) = m_ext';
+m_f(1,k+1) = -0.04;
 
-m_n = zeros(N, M); % (without filtering)
+m_n = zeros(N, M); % (without filtering/parameter fitting)
 m_n(1, :) = m_ext';
 
-m_c = zeros(N, M); % (without filtering, with corrected dE, dS)
+m_c = zeros(N, M); % (without filtering, with parameter fitting)
 m_c(1, :) = m_ext';
-m_c(1, k+1) = -0.05;
-m_c(1, k+2) = -0.6;
+m_c(1, k+1) = -0.04;
 
 % indicator of moisture model that is switched on at each time point
 model_ids = zeros(N, k);
@@ -73,11 +73,12 @@ for i=2:N
     
     % compute & store results for system without Kalman filtering but with
     % initial dE & dS correction
-    m_c(i, :) = moisture_model_ext(Tk,Ed2,Ew2,m_c(i-1,:)',sd.rain(i),dt,1e10);
+    m_c(i, :) = moisture_model_ext2(Tk,Ed2,Ew2,m_c(i-1,:)',sd.rain(i),dt,1e10,0.6,2,0.08,7);
 
     % KALMAN PREDICT STEP
     % estimate new moisture mean based on last best guess (m)
-    [m_pred,P,J,model_ids(i,:)] = ekf_forecast(Tk,Ed2,Ew2,m_f(i-1,:)',sd.rain(i),dt,1e10,P,Qphr);
+%    [m_pred,P,J,model_ids(i,:)] = ekf_forecast(Tk,Ed2,Ew2,m_f(i-1,:)',sd.rain(i),dt,1e10,P,Qphr);
+    [m_pred,P,J,model_ids(i,:)] = ekf_forecast2(Tk,Ed2,Ew2,m_f(i-1,:)',sd.rain(i),dt,1e10,P,Qphr,0.6,2,0.08,7);
     sP(i, :, :) = P;
     trP(i) = prod(eig(P(1:k,1:k)));
     trJ(i) = prod(eig(J));
@@ -104,14 +105,14 @@ end
     subplot(411);
     plot(tdays, m_f(:,2), 'r-', 'linewidth', 1.5);
     hold on;
+    plot(tdays, m_c(:,2), 'b-', 'linewidth', 1.5);
     plot(tdays, m_n(:,2), 'g-', 'linewidth', 1.5);
-    %plot(tdays, m_c(:,2), 'b-', 'linewidth', 1.5);
     %plot(tdays, rain, 'k--', 'linewidth', 1.5);
     plot(tdays(do_assim), sd.fm10(do_assim), 'ko', 'markersize', 4, 'markerfacecolor', 'm');
     %plot(repmat(tdays, 1, 2), [m_f(:,2) - sqrt(sP(:, 2, 2)), m_f(:,2) + sqrt(sP(:, 2, 2))], 'rx');
-    h = legend('sys + UKF', 'sys', 'obs', 'orientation', 'horizontal');
+    h = legend('sys + EKF', 'sys + fit', 'sys', 'obs', 'orientation', 'horizontal');
     set(h, 'fontsize', 10);
-    title(['Evolution of the moisture model [',station,'] [UKF]'], 'fontsize', 12);
+    title(['Evolution of the moisture model [',station,'] [EKF]'], 'fontsize', 12);
     ylim([0, min(1.2,1.1*max([m_f(:,2);m_n(:,2);m_c(:,2)]))]);
 
     % select time indices corresponding to observation times
@@ -125,7 +126,7 @@ end
     hold off;
     h = legend('K(1)', 'K(2)', 'K(3)', 'orientation', 'horizontal');
     set(h, 'fontsize', 10);
-    title('Kalman filter: Kalman gains for 1-hr,10-hr,100-hr fuel [UKF]', 'fontsize', 12);
+    title('Kalman filter: Kalman gains for 1-hr,10-hr,100-hr fuel [EKF]', 'fontsize', 12);
     ylim([-12, 5]);
 
 %     subplot(313);
@@ -147,13 +148,13 @@ end
     plot(repmat(tdays, 1, 2), m_f(:, [4, 5]), 'linewidth', 2);
     h = legend('dE', 'dS');
     set(h, 'fontsize', 12);
-    title('Equilibrium changes [UKF]', 'fontsize', 12);
+    title('Equilibrium changes [EKF]', 'fontsize', 12);
 
     subplot(414);
     plot(repmat(tdays, 1, 2), [Ed + m_f(:,4),Ew + m_f(:,4)], 'linewidth', 1.5);
     h = legend('Ed+dE', 'Ew+dE');
     set(h, 'fontsize', 12);
-    title('Adjusted equilibria [UKF]', 'fontsize', 12);
+    title('Adjusted equilibria [EKF]', 'fontsize', 12);
 %     subplot(413);
 %     plot(tdays, model_ids(:,2), 'or', 'markerfacecolor', 'red');
 %     title('Active submodel of the moisture model for 10-hr fuel [UKF]', 'fontsize', 12);
@@ -165,10 +166,12 @@ end
 %     legend('fm10','relh','rain');
 % 
     ndx = isfinite(sd.fm10);
-    fprintf('MSE for EKF: %g  MAPE for EKF: %g\n', norm(sd.fm10(ndx) - m_f(ndx,2),2)/N,norm(sd.fm10(ndx) - m_f(ndx,2),1)/N);
+    fprintf('MSE for EKF: %g  MAPE for EKF: %g MAPE for FIT: %g, MAPE for ORIG: %g\n', ...
+        norm(sd.fm10(ndx) - m_f(ndx,2),2)/N,norm(sd.fm10(ndx) - m_f(ndx,2),1)/N,...
+        norm(sd.fm10(ndx) - m_c(ndx,2),1)/N,norm(sd.fm10(ndx) - m_n(ndx,2),1)/N);
     
     % store results
     savefig(f, [station,'_',yr,'_ekf.fig']);
-    save([station,'_',yr,'_ekf.mat'], 'sd', 'm_f','m_n');
+    save([station,'_',yr,'_ekf.mat'], 'sd', 'm_f','m_n','m_c');
 
 end

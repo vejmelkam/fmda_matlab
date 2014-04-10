@@ -43,23 +43,19 @@ function run_moisture_model_ext_with_ukf(station,yr)
     % storage space for results (with filtering)
     m_f = zeros(N, M);
     m_f(1, :) = m_ext';
+    m_f(1,k+1) = -0.04;
 
-    m_n = zeros(N, M); % (without filtering)
-    m_n(1, :) = m_ext;
+    m_n = zeros(N, M); % (without filtering/parameter fitting)
+    m_n(1, :) = m_ext';
 
-    m_c = zeros(N, M); % (without filtering, with initial correction)
-    m_c(1, :) = m_ext;
-    m_c(1, 4) = -0.05;
-    m_c(1, 5) = -0.6;
-
-    % indicator of moisture model that is switched on at each time point
-    model_ids = zeros(N, k);
+    m_c = zeros(N, M); % (without filtering, with parameter fitting)
+    m_c(1, :) = m_ext';
+    m_c(1, k+1) = -0.04;
 
     % storage for matrix traces
     trP = zeros(N, 1);
     trS = zeros(N, 1);
     sK = zeros(N, M);
-    sP = zeros(N, M, M);
 
     % W0 is a UKF parameter affecting the sigma point distribution
     Npts = M * 2 + 1;
@@ -77,17 +73,17 @@ function run_moisture_model_ext_with_ukf(station,yr)
         Ew2 = (Ew(i)+Ew(i-1))/2;
 
         % draw the sigma points
-        [m_sigma, w] = ukf_select_sigma_points(m_f(i-1,:)', P, W0);
+        [m_sigma, ~] = ukf_select_sigma_points(m_f(i-1,:)', P, W0);
         sigma_pts(i, :, :) = m_sigma;
 
         % compute & store results for system without KF
         m_n(i, :) = moisture_model_ext(Tk,Ed2,Ew2,m_n(i-1,:)',sd.rain(i),dt,1e10);
 
         % compute & store results for corrected system without KF
-        m_c(i, :) = moisture_model_ext(Tk,Ed2,Ew2,m_c(i-1,:)',sd.rain(i),dt,1e10);
+        m_c(i, :) = moisture_model_ext2(Tk,Ed2,Ew2,m_c(i-1,:)',sd.rain(i),dt,1e10,0.6,2,0.08,7);
 
         % UKF forecast
-        [mf,sqrtP,Pf] = ukf_forecast(Tk,Ed2,Ew2,m_f(i-1,:)',sd.rain(i),dt,1e10,P,Qphr);
+        [mf,sqrtP,Pf] = ukf_forecast2(Tk,Ed2,Ew2,m_f(i-1,:)',sd.rain(i),dt,1e10,P,Qphr,0.6,2,0.08,7);
 
         % KALMAN UPDATE STEP (if measurement available) 
         if(do_assim(i) && ~isnan(sd.fm10(i)))
@@ -113,12 +109,12 @@ function run_moisture_model_ext_with_ukf(station,yr)
     subplot(411);
     plot(tdays, m_f(:,2), 'r-', 'linewidth', 1.5);
     hold on;
+    plot(tdays, m_c(:,2), 'b-', 'linewidth', 1.5);
     plot(tdays, m_n(:,2), 'g-', 'linewidth', 1.5);
-    %plot(tdays, m_c(:,2), 'b-', 'linewidth', 1.5);
     %plot(tdays, rain, 'k--', 'linewidth', 1.5);
     plot(tdays(do_assim), sd.fm10(do_assim), 'ko', 'markersize', 4, 'markerfacecolor', 'm');
     %plot(repmat(tdays, 1, 2), [m_f(:,2) - sqrt(sP(:, 2, 2)), m_f(:,2) + sqrt(sP(:, 2, 2))], 'rx');
-    h = legend('sys + UKF', 'sys', 'obs', 'orientation', 'horizontal');
+    h = legend('sys + UKF', 'sys + fit', 'sys', 'obs', 'orientation', 'horizontal');
     set(h, 'fontsize', 10);
     title(['Evolution of the moisture model [',station,'] [UKF]'], 'fontsize', 12);
     ylim([0, min(1.2,1.1*max([m_f(:,2);m_n(:,2);m_c(:,2)]))]);
@@ -175,10 +171,12 @@ function run_moisture_model_ext_with_ukf(station,yr)
 %     legend('fm10','relh','rain');
 % 
     ndx = isfinite(sd.fm10);
-    fprintf('MSE for UKF: %g  MAPE for UKF: %g\n', norm(sd.fm10(ndx) - m_f(ndx,2),2)/N,norm(sd.fm10(ndx) - m_f(ndx,2),1)/N);
+    fprintf('MSE for UKF: %g  MAPE for UKF: %g MAPE for FIT: %g, MAPE for ORIG: %g\n', ...
+        norm(sd.fm10(ndx) - m_f(ndx,2),2)/N,norm(sd.fm10(ndx) - m_f(ndx,2),1)/N,...
+        norm(sd.fm10(ndx) - m_c(ndx,2),1)/N,norm(sd.fm10(ndx) - m_n(ndx,2),1)/N);
     
     % store results
     savefig(f, [station,'_',yr,'_ukf.fig']);
-    save([station,'_',yr,'_ukf.mat'], 'sd', 'm_f','m_n');
+    save([station,'_',yr,'_ukf.mat'], 'sd', 'm_f','m_n','m_c');
 
 end

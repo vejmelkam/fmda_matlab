@@ -30,6 +30,7 @@ function [tm,fm10s,m_ekfs,m_ukfs,m_nfs] = compare_forecast_vs_kf(sd,from,t_init,
     % parameters of the simulation
     m_ext = zeros(M,1);
     m_ext(1:k) = 0.5 * (Ed(from+1)+Ew(from+1));
+    n_ext(k+1) = -0.04; % Colorado 2012 best fit
 
     % initialize covariance
     P_ukf = eye(M) * 0.01;   % error covariance of the initial guess UKF
@@ -68,10 +69,10 @@ function [tm,fm10s,m_ekfs,m_ukfs,m_nfs] = compare_forecast_vs_kf(sd,from,t_init,
         Ed2 = (Ed(from+i)+Ed(from+i-1))/2;
         Ew2 = (Ew(from+i)+Ew(from+i-1))/2;
         
-        % run forecasts
-        m_nf  = moisture_model_ext(Tk,Ed2,Ew2,m_nf,sd.rain(from+i),dt,1e10);
-        [m_ekf,P_ekf] = ekf_forecast(Tk,Ed2,Ew2,m_ekf,sd.rain(from+i),dt,1e10,P_ekf,Qphr);
-        [m_ukf,sqrtP,P_ukf] = ukf_forecast(Tk,Ed2,Ew2,m_ukf,sd.rain(from+i),dt,1e10,P_ukf,Qphr);
+        % run forecasts (uses Colorado 2012 best fits)
+        m_nf  = moisture_model_ext2(Tk,Ed2,Ew2,m_nf,sd.rain(from+i),dt,1e10,0.6,2,0.08,7);
+        [m_ekf,P_ekf] = ekf_forecast2(Tk,Ed2,Ew2,m_ekf,sd.rain(from+i),dt,1e10,P_ekf,Qphr,0.6,2,0.08,7);
+        [m_ukf,sqrtP,P_ukf] = ukf_forecast2(Tk,Ed2,Ew2,m_ukf,sd.rain(from+i),dt,1e10,P_ukf,Qphr,0.6,2,0.08,7);
 
         % retrieve observation
         d = sd.fm10(from+i);

@@ -1,5 +1,5 @@
 
-year = '2013';
+year = '2012';
 t_fcast = 48;
 
 [errs1,aerrs1] = forecast_ability_station_data(year,2,t_fcast,1);
@@ -29,3 +29,33 @@ save(['station_data_fcast_',year,'.mat'], 'year', 't_fcast', 'steps', 't_inits',
      'errs9', 'aerrs9', 'errs10', 'aerrs10', 'errs11', 'aerrs11', 'errs12', 'aerrs12',  ...
      'errs13', 'aerrs13');
      
+errs_arr = { errs1, errs2, errs3, errs4, errs5, errs6, ...
+              errs7, errs9, errs10, errs11, errs12, errs13 };
+ 
+aerrs_arr = { aerrs1, aerrs2, aerrs3, aerrs4, aerrs5, aerrs6, ...
+              aerrs7, aerrs9, aerrs10, aerrs11, aerrs12, aerrs13 };
+           
+figure;
+for i=[4,7,9,11]
+    e = errs_arr{i};
+    N = size(e,1);
+    e_ekf = e(:,1); e_ukf = e(:,2);
+    plot(48-N+2:48,e_ekf(2:end),'b-');
+    hold on;
+    plot(48-N+2:48,e_ukf(2:end),'r-');
+end
+hold off;
+title('Average errors');
+
+figure;
+for i=[4,7,9,11]
+    e = aerrs_arr{i};
+    N = size(e,1);
+    e_ekf = e(:,1); e_ukf = e(:,2);
+    plot(48-N+2:48,e_ekf(2:end),'b-');
+    hold on;
+    plot(48-N+2:48,e_ukf(2:end),'r-');
+end
+hold off;
+title('Absolute errors');
+ 

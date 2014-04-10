@@ -1,20 +1,22 @@
 
 
 %
-% This script conducts an experiment evaluating the ability of the TSM to
+% This script conducts an experiment evaluating the ability of the Interpolation method to
 % transport observation information across space using the Fay-Herriott
 % model.  This is done via a leave-one-out testing strategy.
 %
 
-S = dir('../data/*fm10*2012*');
+function experiment_dist_interp_loo(year)
+
+years = num2str(year);
+S = dir(['../data/*fm10*',years,'*']);
 N = length(S);
-year = '2012';
-base_tday = datenum(2012,1,1,0,0,0);
+base_tday = datenum(year,1,1,0,0,0);
 sds = cell(N,1);
 max_tday = 0;
 
 for i=1:N
-    sds{i} = load_station_data(S(i).name(1:5),year);
+    sds{i} = load_station_data(S(i).name(1:5),years);
     sds{i}.tdays = sds{i}.tdays - base_tday;
     max_tday = max(max_tday, sds{i}.tdays(end));
 end
@@ -89,7 +91,7 @@ for z=1:length(S)
         subplot(211);
         plot([loo_tm,loo_tm],[loo_tgt,loo_interp],'linewidth',1.2);
         legend('tgt', 'interp');
-        title([sds{z}.stid,': Comparison between TSM fit (LS and CLS) and observation']);
+        title([sds{z}.stid,': Comparison between Interp2 fit (LS and CLS) and observation']);
         xlabel('Time [days from 1.1]');
         ylabel('fm10 [-]');
 
@@ -100,7 +102,7 @@ for z=1:length(S)
         xlabel('Time [days from 1.1]');
         ylabel('fm10 [-]');
         
-        print('-dpng', [station_code,'_interp2_vs_time']);
+        print('-dpng', [station_code,'_',years,'_interp2_vs_time']);
 
         f2 = figure();
         set(f2,'units','centimeters');
@@ -115,7 +117,7 @@ for z=1:length(S)
         axis('square');
         title([sds{z}.stid,': Observation vs. INTERP2 fit']);
         xlabel('observation [-]');
-        ylabel('TSM fit [-]');
+        ylabel('Interp2 fit [-]');
 
         subplot(122);
         plot(abs(loo_tgt-loo_interp),sqrt(loo_var),'o', 'MarkerFaceColor',[0,0,0],'MarkerSize',5)
@@ -124,7 +126,7 @@ for z=1:length(S)
         xlabel('abs. error [-]');
         ylabel('stdev [-]');
         
-        print('-dpng', [station_code,'_interp_scatters']);
+        print('-dpng', [station_code,'_',years,'_interp2_scatters']);
         
         % report
         valids = find(isfinite(loo_tgt));
@@ -135,7 +137,7 @@ for z=1:length(S)
 
         % dump the results to file
         sdsz = sds{z};
-        save([station_code,'.mat'],'loo_tm','loo_interp','loo_tgt','sdsz','loo_var');
+        save([station_code,'_',years,'_interp2.mat'],'loo_tm','loo_interp','loo_tgt','sdsz','loo_var');
         
     else
         fprintf('Not enough valid points for station %s\n', station_code);

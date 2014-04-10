@@ -367,7 +367,7 @@ function out = experiment_tsm_leave_one_out_kf(station_start,station_skip,year)
         
         % dump the results to file
         sdsz = sds{z};
-        save([station_code,'_',years,'_tsm_loo.mat'],'loo_tm','loo_tsm','loo_tsmc','loo_tgt','betas', 'betasc','sdsz','loo_var','loo_varc');
+        save([station_code,'_',years,'_tsm_loo_kf.mat'],'loo_tm','loo_tsm','loo_tsmc','loo_tgt','betas', 'betasc','sdsz','loo_var','loo_varc');
 
     end
 end

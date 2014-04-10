@@ -6,21 +6,23 @@
 % model.  This is done via a leave-one-out testing strategy.
 %
 
-year = '2012';
-S = dir(['../data/*fm10*',year,'*']);
+function experiment_tsm_leave_one_out(sstart,sskip,year)
+
+years = num2str(year);
+S = dir(['../data/*fm10*',years,'*']);
 N = length(S);
-base_tday = datenum(2012,1,1,0,0,0);
+base_tday = datenum(year,1,1,0,0,0);
 sds = cell(N,1);
 max_tday = 0;
 
 for i=1:N
-    sds{i} = load_station_data(S(i).name(1:5),year);
+    sds{i} = load_station_data(S(i).name(1:5),years);
     sds{i}.tdays = sds{i}.tdays - base_tday;
     max_tday = max(max_tday, sds{i}.tdays(end));
 end
 
 
-for z=1:length(S)
+for z=sstart:sskip:length(S)
     Ts = 120:1/24:min(270,max_tday);
     sts_per_time = zeros(numel(Ts),1);
     loo_ndx  = z;
@@ -34,7 +36,8 @@ for z=1:length(S)
     betasc   = zeros(numel(Ts),1);
     station_code = sds{z}.stid;
     fprintf('Leaving out station: %s\n', station_code);
-    
+   
+    conv_failures = 0;
     iter_ndx = 1;
     for t=1:length(Ts)
 
@@ -82,10 +85,11 @@ for z=1:length(S)
             end            
             
             [beta,sigma2] = estimate_tsm_parameters(X,Z,G);
-            [betac,sigma2c] = estimate_tsm_parameters_constr(X,Z,G,[X;y_loo']);
+            [betac,sigma2c] = estimate_tsm_parameters_constr(X,Z,G,[X;y_loo'],0.6);
             if(isnan(sigma2c))
                 sigma2c = sigma2;
                 betac = beta;
+                conv_failures = conv_failures + 1;
             end
             betas(iter_ndx) = beta(1);
             betasc(iter_ndx) = betac(1);
@@ -101,9 +105,9 @@ for z=1:length(S)
 
     end
     
-    % we censor loo_tsm to be between 0 and 2.5
+    % we censor loo_tsm to be between 0 and 0.6
     loo_tsm(loo_tsm < 0) = 0;
-    loo_tsm(loo_tsm > 2.5) = 2.5;
+    loo_tsm(loo_tsm > 0.6) = 0.6;
 
     loo_tgt = loo_tgt(1:iter_ndx-1);
     loo_tsm = loo_tsm(1:iter_ndx-1);
@@ -142,7 +146,7 @@ for z=1:length(S)
         xlabel('Time [days from 1.1]');
         ylabel('fm10 [-]');
         
-        print('-dpng', [station_code,'_tsm_vs_time']);
+        print('-dpng', [station_code,'_',years,'_tsm_vs_time']);
 
         f2 = figure();
         set(f2,'units','centimeters');
@@ -183,27 +187,27 @@ for z=1:length(S)
         xlabel('abs. error [-]');
         ylabel('stdev [-]');
         
-        print('-dpng', [station_code,'_tsm_scatters']);
+        print('-dpng', [station_code,'_',years,'_tsm_scatters']);
         
         close all;
 
         % report
         valids = find(isfinite(loo_tgt));
         Nt = length(valids);
-        fprintf('Station: %s LS/MAPE: %g  LS/MSE: %g  CLS/MAPE: %g   CLS/MSE: %g\n', ...
+        fprintf('Station: %s LS/MAPE: %g  LS/MSE: %g  CLS/MAPE: %g   CLS/MSE: %g convergence failures: %d\n', ...
                 station_code, norm(loo_tgt(valids)-loo_tsm(valids),1)/Nt, ...
                 norm(loo_tgt(valids)-loo_tsm(valids),2)/Nt, ...
                 norm(loo_tgt(valids)-loo_tsmc(valids),1)/Nt, ...
-                norm(loo_tgt(valids)-loo_tsmc(valids),2)/Nt);
+                norm(loo_tgt(valids)-loo_tsmc(valids),2)/Nt, ...
+                conv_failures);
 
         % dump the results to file
         sdsz = sds{z};
-        save([station_code,'.mat'],'loo_tm','loo_tsm','loo_tsmc','loo_tgt','betas', 'betasc','sdsz','loo_var','loo_varc');
+        save([station_code,'_',years,'_tsm_loo.mat'],'loo_tm','loo_tsm','loo_tsmc','loo_tgt','betas', 'betasc','sdsz','loo_var','loo_varc');
         
     else
         fprintf('Not enough valid points for station %s\n', station_code);
     end
-    
     
 end
 

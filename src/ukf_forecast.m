@@ -16,6 +16,9 @@
 %    dcay - the decay time constant [hrs] of the assimilated coefficients
 %    P - the covariance matrix associated with current state errors
 %    Qphr - process noise incurred (per hour)
+%    R - the observation noise covariance
+%    kappa - variable allowing incorporation of prior information into the
+%            Unscented transform, set to 0 if in doubt
 %
 %    RETURNS:
 %    mf     - the forecast
@@ -23,25 +26,28 @@
 %    noise)
 %    Pf     - the forecast covariance
 
-function [mf,sqrtP,Pf] = ukf_forecast(Tk,Ed,Ew,m,r,dt,dcay,P,Qphr)
+function [mf,sqrtP,f_sigma] = ukf_forecast(Tk,Ed,Ew,m,r,dt,dcay,P,Qphr,R,kappa)
 
-    M = size(m,1);
-    Npts = 2*M+1;
-    kappa = 1;
+    nx = size(m,1);
+    nv = size(R,1);
+    n = 2*nx+ nv;
+    Npts = 2*n+1;
 
-    m_sigma = ukf_select_sigma_points(m,P,kappa);
+    % construct sigma points from last assimilated state
+    f_sigma = ukf_select_sigma_points(m,P,Qphr*dt/3600,R,kappa);
 
-    w = ones(Npts,1) * 1/(2*(M+kappa));
-    w(Npts) = kappa / (M+kappa);
+    % build weights for the sigma points
+    w = ones(Npts,1) * 1/(2*(n+kappa));
+    w(Npts) = kappa / (n+kappa);
 
-    f_sigma = zeros(M, Npts);
-    for n=1:Npts
-        f_sigma(:,n) = moisture_model_ext(Tk,Ed,Ew,m_sigma(:,n),r,dt,dcay);
+    % pass sigma points through the model function (only the state!)
+    % noise terms remain stored as constructed in f_sigma above
+    for i=1:Npts
+        f_sigma(1:nx,i) = moisture_model_ext(Tk,Ed,Ew,f_sigma(1:nx,i),r,dt,dcay) + f_sigma(nx+1:2*nx,i);
     end
 
     % compute the prediction mean x_mean(i|i-1)
-    mf = sum(f_sigma * diag(w), 2);
+    mf = f_sigma * w;
     
-    % FIXME: need to replace this by direct square root propagation
-    sqrtP = (f_sigma - repmat(mf, 1, Npts))*diag(w.^0.5);
-    Pf = Qphr*dt/3600 + (sqrtP * sqrtP');
+    % compute sqryP*sqrtP' = Pf (forecast covariance)
+    sqrtP = (f_sigma(1:nx,:) - repmat(mf(1:nx), 1, Npts))*diag(w.^0.5);

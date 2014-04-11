@@ -21,25 +21,28 @@
 %    noise)
 %    Pf     - the forecast covariance
 %
-function [mf,sqrtP,Pf] = ukf_forecast2(Tk,Ed,Ew,m,r,dt,dcay,P,Qphr,S,rk,r0,Trk)
+function [mf,sqrtP,f_sigma] = ukf_forecast2(Tk,Ed,Ew,m,r,dt,dcay,P,Qphr,R,kappa,S,rk,r0,Trk)
 
-    M = size(m,1);
-    Npts = 2*M+1;
-    kappa = 1;
-
-    m_sigma = ukf_select_sigma_points(m,P,kappa);
-
-    w = ones(Npts,1) * 1/(2*(M+kappa));
-    w(Npts) = kappa / (M+kappa);
+    nx = size(m,1);
+    nv = size(R,1);
+    n = 2*nx + nv;
+    Npts = 2*n+1;
     
-    f_sigma = zeros(M, Npts);
-    for n=1:Npts
-        f_sigma(:,n) = moisture_model_ext2(Tk,Ed,Ew,m_sigma(:,n),r,dt,dcay,S,rk,r0,Trk);
+    % construct sigma points from last assimilated state
+    f_sigma = ukf_select_sigma_points(m,P,Qphr*dt/3600,R,kappa);
+
+    % build weights for the sigma points
+    w = ones(Npts,1) * 1/(2*(n+kappa));
+    w(Npts) = kappa / (n+kappa);
+    
+    % pass sigma points through the model function (only the state!)
+    % noise terms remain stored as constructed in f_sigma above
+    for i=1:Npts
+        f_sigma(1:nx,i) = moisture_model_ext2(Tk,Ed,Ew,f_sigma(1:nx,i),r,dt,dcay,S,rk,r0,Trk) + f_sigma(nx+1:2*nx,i);
     end
 
     % compute the prediction mean x_mean(i|i-1)
-    mf = sum(f_sigma * diag(w), 2);
+    mf = f_sigma(1:nx,:) * w;
     
-    % FIXME: need to replace this by direct square root propagation
-    sqrtP = (f_sigma - repmat(mf, 1, Npts))*diag(w.^0.5);
-    Pf = Qphr*dt/3600 + (sqrtP * sqrtP');
+    % compute sqryP*sqrtP' = Pf (forecast covariance)
+    sqrtP = (f_sigma(1:nx,:) - repmat(mf, 1, Npts))*diag(w.^0.5);

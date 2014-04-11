@@ -8,7 +8,7 @@
 %  synopsis: out = experiment_tsm_leave_one_out_kf(station_start,station_skip)
 %
 
-function out = experiment_tsm_leave_one_out_kf(station_start,station_skip,year)
+function out = experiment_tsm_leave_one_out_kf(station_start,station_skip,year,filter_type)
 
     % find all stations with data in 2012
     years = num2str(year);
@@ -31,6 +31,8 @@ function out = experiment_tsm_leave_one_out_kf(station_start,station_skip,year)
     Qphr(1:k, 1:k) = diag([0.0005,0.00005,0.00001]);
     Qphr(k+1,k+1) = 0.0001;
     Qphr(k+2,k+2) = 0.0001;
+    
+    kappa = 0;
     
     % load all station data
     for i=1:N
@@ -60,7 +62,8 @@ function out = experiment_tsm_leave_one_out_kf(station_start,station_skip,year)
         m_lastt = zeros(N,1);
         ms = zeros(N,M);
         P = zeros(N,M,M);
-        sqrtP = zeros(N,M,2*M+1);
+        sigma_fs = zeros(N,2*M+1,2*(2*M+1)+1);
+        sqrtP = zeros(N,M,2*(2*M+1)+1);
         for i=1:N
             ndxs = find_valid_obs(120,sds(i));
             P(i,:,:) = 0.01 * eye(M);
@@ -94,16 +97,28 @@ function out = experiment_tsm_leave_one_out_kf(station_start,station_skip,year)
             % if the model has an observation valid now, integrate the model
             % to this time point (follow UKF forecast procedure)
             % mark model as updated to this time point
-            for si=1:length(st_ndx)
+            for si=1:Nst
                 i = st_ndx(si);
                 if(m_init(i))
                     ed = sds{i}.ed(ndxs(i));
                     ew = sds{i}.ew(ndxs(i));
                     ri = sds{i}.rain(ndxs(i));
                     dt = (Ts(t)-m_lastt(i))*86400;
+                    if(dt<=0)
+                        error('dt must be positive')
+                    end
                     Pi = squeeze(P(i,:,:));
-%                    [mi,sqrtPi,Pi] = ukf_forecast(Tk,ed,ew,ms(i,:)',ri,dt,1e10,Pi,Qphr);
-                    [mi,Pi] = ekf_forecast(Tk,ed,ew,ms(i,:)',ri,dt,1e10,Pi,Qphr);
+                    if(filter_type==2)
+                        f = @(x,w) moisture_model_ext(Tk,ed,ew,x,ri,dt,1e10) + w;
+                        [mi,sqrtPi,sigma_f] = ukf_forecast_general(ms(i,:)',f,Pi,Qphr*dt/3600,1,kappa);
+                        sigma_fs(i,:,:) = sigma_f;
+                        sqrtP(i,:,:) = sqrtPi;
+                        Pi = sqrtPi*sqrtPi';
+                    elseif(filter_type==1)
+                        [mi,Pi] = ekf_forecast(Tk,ed,ew,ms(i,:)',ri,dt,1e10,Pi,Qphr);
+                    else
+                        error('Invalid filter type');
+                    end
                     if(any(isnan(Pi)))
                         warning('nans found in forecast covariance');
                         Pi
@@ -113,7 +128,6 @@ function out = experiment_tsm_leave_one_out_kf(station_start,station_skip,year)
                         warning('negative eigenvalues in forecast covariance');
                     end
                     ms(i,:) = mi';
-%                    sqrtP(i,:,:) = sqrtPi;
                     P(i,:,:) = Pi;
                     m_lastt(i) = Ts(t);
                     st_map(si) = true;
@@ -121,7 +135,7 @@ function out = experiment_tsm_leave_one_out_kf(station_start,station_skip,year)
                     ms(i,1:3) = 0.5*(sds{i}.ew(ndxs(i))+sds{i}.ed(ndxs(i)));
                     m_init(i) = true;
                     m_lastt(i) = Ts(t);
-                    st_map(si) = true;
+                    st_map(si) = false;
                 end
             end
             
@@ -139,12 +153,13 @@ function out = experiment_tsm_leave_one_out_kf(station_start,station_skip,year)
             Nobs = 0;
             for o=1:Nst
                 if(st_map(o) && isfinite(fm10o(st_ndx(o))))
-                    std = sds{st_ndx(o)};
+                    so = st_ndx(o);
+                    std = sds{so};
                     stt = times(o);
                     Nobs = Nobs + 1;
-                    X(Nobs,:) = [ms(st_ndx(o),2),1,std.elevation/2000,std.rain(stt)];
-                    Z(Nobs) = fm10o(st_ndx(o));
-                    G(Nobs) = fm10v(st_ndx(o));
+                    X(Nobs,:) = [ms(so,2),1,std.elevation/2000,std.rain(stt)];
+                    Z(Nobs) = fm10o(so);
+                    G(Nobs) = fm10v(so);
                 end
             end
 
@@ -207,8 +222,8 @@ function out = experiment_tsm_leave_one_out_kf(station_start,station_skip,year)
                 loo_tm(iter_ndx) = Ts(t);
                 if(~isempty(loo_in_st))
                     loo_sd = sds{loo_ndx};
-                    loo_tgt(iter_ndx) = loo_sd.fm10(times(loo_in_st));
                     stt = times(loo_in_st);
+                    loo_tgt(iter_ndx) = loo_sd.fm10(stt);
                     y_loo = [ms(loo_ndx,2),1,loo_sd.elevation/2000,loo_sd.rain(stt)]';
                     y_loo = y_loo(1:size(X,2));
                     loo_tsm(iter_ndx) = y_loo' * beta;
@@ -222,37 +237,34 @@ function out = experiment_tsm_leave_one_out_kf(station_start,station_skip,year)
                 % find regressors for all included stations
                 for o=1:Nst
                     if(st_map(o))
-                        std = sds{st_ndx(o)};
+                        so = st_ndx(o);
+                        std = sds{so};
                         stt = times(o);
-                        xr = [ms(st_ndx(o),2),1,std.elevation/2000,std.rain(stt)]';
+                        xr = [ms(so,2),1,std.elevation/2000,std.rain(stt)]';
                         xr = xr(1:size(X,2));
 
                         % remove the part explained by the forecast
 %                        xr(1) = 0;
                         xpseudo = xr' * betac;
-                        varpseudo = sigma2c + xr' * (XSXc\xr) + 1e-3;
-                        Po = squeeze(P(o,:,:));
-                        sqrtPo = squeeze(sqrtP(o,:,:));
-%                        [ms(o,:),P(o,:,:)] = ukf_update(ms(o,:)',sqrtPo,Po,[0,1,0,0,0],xpseudo,varpseudo);
-                        [ms(o,:),P(o,:,:)] = ekf_update(ms(o,:)',Po,[0,1,0,0,0],xpseudo,varpseudo);
-    %                     if(o==1)
-    %                         fprintf('** status **\n');
-    %                         fprintf('%g ',ms(o,:));
-    %                         fprintf('\tpso:%g var:%g\n', xpseudo, varpseudo);
-    %                         fprintf('betas: ');
-    %                         fprintf('%g ', beta);
-    %                         fprintf('\nbetasc: ');
-    %                         fprintf('%g ', betac);
-    %                         fprintf('\n\n');
-    %                     end
-
-                        if(any(isnan(P(o,:,:))))
-                            warning('nans found in updated covariance');
-                            squeeze(P(o,:,:))
+                        varpseudo = sigma2c + xr' * (XSXc\xr);
+                        if(filter_type==2)
+                            sqrtPo = squeeze(sqrtP(so,:,:));
+                            sigma_f = squeeze(sigma_fs(so,:,:));
+                            [ms(so,:),P(so,:,:)] = ukf_update(ms(so,:)',sqrtPo,sigma_f,[0,1,0,0,0],xpseudo,varpseudo,kappa);
+                        elseif(filter_type==1)
+                            Po = squeeze(P(so,:,:));
+                            [ms(so,:),P(so,:,:)] = ekf_update(ms(so,:)',Po,[0,1,0,0,0],xpseudo,varpseudo);
+                        else
+                            error('Invalid filter type');
                         end
-                        if(any(eig(squeeze(P(o,:,:))) < 0))
-                            warning('negative eigenvalues found in updated covariance');
-                            squeeze(P(o,:,:))
+
+                        if(any(isnan(P(so,:,:))))
+                            squeeze(P(so,:,:))
+                            warning('nans found in updated covariance');
+                        end
+                        if(any(eig(squeeze(P(so,:,:))) <= 0))
+                            squeeze(P(so,:,:))
+                            warning('Po is not positive definite');
                         end
                     end
                 end
@@ -285,7 +297,6 @@ function out = experiment_tsm_leave_one_out_kf(station_start,station_skip,year)
         betasc = betasc(1:iter_ndx-1);
 
         if(iter_ndx > 5)
-
             f1 = figure();
             set(f1,'units','centimeters');
             set(f1,'papersize',[18,6])        

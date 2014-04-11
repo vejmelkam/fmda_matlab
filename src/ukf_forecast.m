@@ -26,9 +26,13 @@
 function [mf,sqrtP,Pf] = ukf_forecast(Tk,Ed,Ew,m,r,dt,dcay,P,Qphr)
 
     M = size(m,1);
-    Npts = 2*M;
+    Npts = 2*M+1;
+    kappa = 1;
 
-    m_sigma = ukf_select_sigma_points(m,P);
+    m_sigma = ukf_select_sigma_points(m,P,kappa);
+
+    w = ones(Npts,1) * 1/(2*(M+kappa));
+    w(Npts) = kappa / (M+kappa);
 
     f_sigma = zeros(M, Npts);
     for n=1:Npts
@@ -36,8 +40,8 @@ function [mf,sqrtP,Pf] = ukf_forecast(Tk,Ed,Ew,m,r,dt,dcay,P,Qphr)
     end
 
     % compute the prediction mean x_mean(i|i-1)
-    mf = mean(f_sigma, 2);
+    mf = sum(f_sigma * diag(w), 2);
     
     % FIXME: need to replace this by direct square root propagation
-    sqrtP = (f_sigma - repmat(mf, 1, Npts));
-    Pf = Qphr*dt/3600 + 1/Npts*(sqrtP * sqrtP');
+    sqrtP = (f_sigma - repmat(mf, 1, Npts))*diag(w.^0.5);
+    Pf = Qphr*dt/3600 + (sqrtP * sqrtP');

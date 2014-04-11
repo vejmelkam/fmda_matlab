@@ -23,21 +23,26 @@
 function [ma,Pa,K,S] = ukf_update(mf,sqrtP,Pf,H,d,R)
 
     M = size(mf,1);
-    Npts = 2*M;
+    Npts = 2*M+1;
+    kappa = 1;
     
     % generate new sigma points
-    sigs = ukf_select_sigma_points(mf, Pf);
+    sigs = ukf_select_sigma_points(mf, Pf, kappa);
+
+    % compute the weights for kappa
+    w = ones(Npts,1) * 1/(2*(M+kappa));
+    w(Npts) = kappa / (M+kappa);
 
     % generate forecast-derived observation
     y_pred_i = H * sigs;
-    y_pred = mean(y_pred_i, 2);
+    y_pred = y_pred_i*w;
 
-    % innovation covariance (H=I due to direct observation)
-    sqrtS = y_pred_i - y_pred;
-    S = 1/Npts*(sqrtS * sqrtS') + R; 
+    % innovation covariance
+    sqrtS = (y_pred_i - y_pred)*diag(w.^0.5);
+    S = (sqrtS * sqrtS') + R; 
 
     % the cross covariance of state & observation errors
-    Cxy = 1/Npts * sqrtP * sqrtS';
+    Cxy = sqrtP * sqrtS';
 
     % Kalman gain is inv(S) * P for this case (direct observation)
     K = Cxy / S;

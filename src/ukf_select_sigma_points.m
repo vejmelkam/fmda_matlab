@@ -12,14 +12,21 @@
 %   Sigma - the current covariance matrix of the state
 %
 
-function X = ukf_select_sigma_points(x, Sigma)
+function X = ukf_select_sigma_points(x, Sigma, kappa)
 
+    if(nargin < 3)
+        kappa = 0;
+    end
+    
     N = size(x,1);
-    X = zeros(N, 2*N);
+    X = zeros(N, 2*N+1);
     
     % matlab decomposition is A'*A, so we use the rows
-    SF = chol(Sigma);
+    SF = chol((N+kappa)*Sigma);
     for i=1:N
        X(:,i) = x + SF(i,:)';
        X(:,i+N) = x - SF(i,:)';
     end
+    
+    X(:, 2*N+1) = x;
+

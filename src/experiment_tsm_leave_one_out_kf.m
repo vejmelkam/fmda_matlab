@@ -60,7 +60,7 @@ function out = experiment_tsm_leave_one_out_kf(station_start,station_skip,year)
         m_lastt = zeros(N,1);
         ms = zeros(N,M);
         P = zeros(N,M,M);
-        sqrtP = zeros(N,M,2*M);
+        sqrtP = zeros(N,M,2*M+1);
         for i=1:N
             ndxs = find_valid_obs(120,sds(i));
             P(i,:,:) = 0.01 * eye(M);
@@ -102,8 +102,8 @@ function out = experiment_tsm_leave_one_out_kf(station_start,station_skip,year)
                     ri = sds{i}.rain(ndxs(i));
                     dt = (Ts(t)-m_lastt(i))*86400;
                     Pi = squeeze(P(i,:,:));
-                    [mi,sqrtPi,Pi] = ukf_forecast(Tk,ed,ew,ms(i,:)',ri,dt,1e10,Pi,Qphr);
-%                    [mi,Pi] = ekf_forecast(Tk,ed,ew,ms(i,:)',ri,dt,1e10,Pi,Qphr);
+%                    [mi,sqrtPi,Pi] = ukf_forecast(Tk,ed,ew,ms(i,:)',ri,dt,1e10,Pi,Qphr);
+                    [mi,Pi] = ekf_forecast(Tk,ed,ew,ms(i,:)',ri,dt,1e10,Pi,Qphr);
                     if(any(isnan(Pi)))
                         warning('nans found in forecast covariance');
                         Pi
@@ -113,7 +113,7 @@ function out = experiment_tsm_leave_one_out_kf(station_start,station_skip,year)
                         warning('negative eigenvalues in forecast covariance');
                     end
                     ms(i,:) = mi';
-                    sqrtP(i,:,:) = sqrtPi;
+%                    sqrtP(i,:,:) = sqrtPi;
                     P(i,:,:) = Pi;
                     m_lastt(i) = Ts(t);
                     st_map(si) = true;
@@ -230,11 +230,11 @@ function out = experiment_tsm_leave_one_out_kf(station_start,station_skip,year)
                         % remove the part explained by the forecast
 %                        xr(1) = 0;
                         xpseudo = xr' * betac;
-                        varpseudo = sigma2c + xr' * (XSXc\xr) + 1e-3;
+                        varpseudo = sigma2c + xr' * (XSXc\xr);
                         Po = squeeze(P(o,:,:));
                         sqrtPo = squeeze(sqrtP(o,:,:));
-                        [ms(o,:),P(o,:,:)] = ukf_update(ms(o,:)',sqrtPo,Po,[0,1,0,0,0],xpseudo,varpseudo);
-%                        [ms(o,:),P(o,:,:)] = ekf_update(ms(o,:)',Po,[0,1,0,0,0],xpseudo,varpseudo);
+%                        [ms(o,:),P(o,:,:)] = ukf_update(ms(o,:)',sqrtPo,Po,[0,1,0,0,0],xpseudo,varpseudo);
+                        [ms(o,:),P(o,:,:)] = ekf_update(ms(o,:)',Po,[0,1,0,0,0],xpseudo,varpseudo);
     %                     if(o==1)
     %                         fprintf('** status **\n');
     %                         fprintf('%g ',ms(o,:));

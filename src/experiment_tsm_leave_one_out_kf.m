@@ -230,7 +230,7 @@ function out = experiment_tsm_leave_one_out_kf(station_start,station_skip,year)
                         % remove the part explained by the forecast
 %                        xr(1) = 0;
                         xpseudo = xr' * betac;
-                        varpseudo = sigma2c + xr' * (XSXc\xr);
+                        varpseudo = sigma2c + xr' * (XSXc\xr) + 1e-3;
                         Po = squeeze(P(o,:,:));
                         sqrtPo = squeeze(sqrtP(o,:,:));
 %                        [ms(o,:),P(o,:,:)] = ukf_update(ms(o,:)',sqrtPo,Po,[0,1,0,0,0],xpseudo,varpseudo);

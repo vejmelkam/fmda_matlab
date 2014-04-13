@@ -90,6 +90,8 @@ function [errs,aerrs] = forecast_ability_station_data(year,t_init,t_fcast,step)
     legend('ekf','ukf','none');
     xlabel('Time [hours]');
     ylabel('Error [-]');
+    
+    drawnow;
 
     eamean = nanmean(all_abs_ekfs)';
     uamean = nanmean(all_abs_ukfs)';

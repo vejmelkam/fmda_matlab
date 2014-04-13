@@ -6,7 +6,7 @@
 %
 %  This function will run the moisture model for one time step.
 %  Synopsis: 
-%            m_ext = moisture_model(Tk, Ew, Ed, m_ext, r, dt, assim_decay_tk,S,k)
+%            m_ext = moisture_model_ext2(Tk, Ew, Ed, m_ext, r, dt, assim_decay_tk,S,k)
 %  Arguments:
 %
 %            Tk - the nominal time lags for each fuel class [hours]

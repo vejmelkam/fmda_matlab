@@ -16,7 +16,7 @@
 %
 %
 
-function [Ed,Ew] = equilibrium_moisture(P, Q, T)
+function [Ed,Ew,H] = equilibrium_moisture(P, Q, T)
 
     % saturated vapor pressure (at each location, size n x 1)
     Pws = exp(54.842763 - 6763.22./T - 4.210 * log(T) + 0.000367*T + ...

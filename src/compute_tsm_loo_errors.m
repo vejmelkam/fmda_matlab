@@ -1,7 +1,13 @@
 
+%
+% Evaluates the MAPE,mean error and RMSE for a leave-one-out spatial
+% experiment.
+%
+% Synopsis: [sns,errs,aerrs,rmse] = compute_tsm_loo_errors(dirname)
+%
 
 
-function [sns,errs,aerrs,rmse] = compute_tsm_loo_errors(dirname)
+function [sns,errs,aerrs,rmse,Nt] = compute_tsm_loo_errors(dirname,fieldname)
 
     S = dir([dirname,'/*.mat']);
     Nst = length(S);
@@ -12,21 +18,19 @@ function [sns,errs,aerrs,rmse] = compute_tsm_loo_errors(dirname)
     sns = cell(Nst,1);
     
     total = 0;
+    Nt = 0;
     for i=1:Nst
         d = load([dirname,'/',S(i).name]);
-        if(isfield(d,'loo_tsm'))
-            pred = d.loo_tsm;
-        else
-            pred = d.loo_interp;
-        end
+        pred = getfield(d,fieldname);
         valid = isfinite(d.loo_tgt);
         N = sum(valid);
         if(N > 0)
             total = total + 1;
             sns{total} = S(i).name(1:5);
-            errs(total) = mean(pred(valid) - d.loo_tgt(valid));
-            aerrs(total) = norm(pred(valid) - d.loo_tgt(valid),1)/N;
-            rmse(total) = norm(pred(valid) - d.loo_tgt(valid),2)/N;
+            errs(total) = sum(pred(valid) - d.loo_tgt(valid));
+            aerrs(total) = norm(pred(valid) - d.loo_tgt(valid),1);
+            rmse(total) = norm(pred(valid) - d.loo_tgt(valid),2);
+            Nt = Nt + N;
         end
     end
     

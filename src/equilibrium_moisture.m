@@ -28,11 +28,12 @@ function [Ed,Ew,H] = equilibrium_moisture(P, Q, T)
     
     % relative humidity (percent, at each location, size n x 1)
     H = 100 * Pw ./ Pws;
+    H2 = min(max(H,0),100);
     
     % drying/wetting fuel equilibrium moisture contents (location specific,
     % n x 1)
-    Ed = 0.924*H.^0.679 + 0.000499*exp(0.1*H) + 0.18*(21.1 + 273.15 - T).*(1 - exp(-0.115*H));
-    Ew = 0.618*H.^0.753 + 0.000454*exp(0.1*H) + 0.18*(21.1 + 273.15 - T).*(1 - exp(-0.115*H));
+    Ed = 0.924*H2.^0.679 + 0.000499*exp(0.1*H2) + 0.18*(21.1 + 273.15 - T).*(1 - exp(-0.115*H2));
+    Ew = 0.618*H2.^0.753 + 0.000454*exp(0.1*H2) + 0.18*(21.1 + 273.15 - T).*(1 - exp(-0.115*H2));
 
     % remap values
     Ed = Ed * 0.01;

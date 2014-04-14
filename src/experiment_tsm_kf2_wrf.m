@@ -29,13 +29,15 @@ function experiment_tsm_kf2_wrf(wrf_file,filter_type,stop_da_at)
     
     assert(all(ed(:) > 0));
     assert(all(ew(:) > 0));
-    
-    if(any(relh(:) < 0))
-        warning('fixing WRF relative humidity, found %d negative values', sum(relh(:) < 0));
+
+    relh_neg = sum(relh(:) < 0);
+    relh_pos = sum(relh(:) > 1);
+    if(relh_neg > 0)
+        warning('fixing WRF relative humidity, found %d negative values', relh_neg);
         relh(relh < 0) = 0;
     end
-    if(any(relh(:) > 1))
-        warning('fixing WRF relative humidity, found %d negative values', sum(relh(:) > 1));
+    if(relh_pos > 0)
+        warning('fixing WRF relative humidity, found %d values over 1', relh_pos);
         relh(relh > 1) = 1;
     end
     
@@ -323,7 +325,7 @@ function experiment_tsm_kf2_wrf(wrf_file,filter_type,stop_da_at)
     save([out_dir,'/wrf_tsm2_',out_dir,'.mat'], ...
          'Ts','fm10_tgt','fm10_tsm','fm10_tsmc','fm10_tsm_var', ...
          'fm10_tsmc_var', 'betas', 'betasc','sds','fm10_model', ...
-         'rain', 'relh', 't2', 'ew', 'ed');
+         'rain', 'relh', 't2', 'ew', 'ed', 'relh_neg','relh_pos');
     
     % after all computations complete, show some pretty pictures`
     for s=1:Nst

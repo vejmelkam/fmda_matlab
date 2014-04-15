@@ -6,7 +6,7 @@
 %
 %  This function will run the moisture model for one time step.
 %  Synopsis: 
-%            m_ext = moisture_model(Tk, Ew, Ed, m_ext, r, dt, assim_decay_tk)
+%            m_ext = moisture_model(Tk, Ew, Ed, m_ext, r, dt)
 %  Arguments:
 %
 %            Tk - the nominal time lags for each fuel class [hours]
@@ -34,7 +34,7 @@
 %                      (1 - drying, 2 - wetting, 3 - rain, 4 - dead zone)
 %
 
-function [m_ext, model_ids] = moisture_model_ext(Tk, Ed, Ew, m_ext, r, dt, assim_decay_tk)
+function [m_ext, model_ids] = moisture_model_ext(Tk, Ed, Ew, m_ext, r, dt)
 
     k = length(Tk);                 % number of fuel classes
     r0 = 0.05;                      % threshold rainfall [mm/h]
@@ -53,9 +53,9 @@ function [m_ext, model_ids] = moisture_model_ext(Tk, Ed, Ew, m_ext, r, dt, assim
     % where rainfall is above threshold (spatially different), apply
     % saturation model, equi and rlag are specific to fuel type and
     % location
-    equi = zeros(k+2,1);
+    equi = zeros(k,1);
     equi(1:k) = m;
-    rlags = zeros(k+2,1);
+    rlags = zeros(k,1);
     model_ids = zeros(k,1);
     
     % if rain model is active
@@ -73,13 +73,10 @@ function [m_ext, model_ids] = moisture_model_ext(Tk, Ed, Ew, m_ext, r, dt, assim
         equi(m > Ed) = Ed;
     end
     
-    % set the inverse lag constants for the assimilated differences
-    rlags(k+1:k+2) = 1.0 ./ (assim_decay_tk * 3600);
-        
     % select appropriate integration method (small change -> big errors in
     % the standard solution)
     changes = dt * rlags;
-    for i=1:k+2
+    for i=1:k
         if(changes(i) > 0.01)
             m_ext(i) = m_ext(i) + (equi(i) - m_ext(i)) * (1 - exp(-changes(i)));
         else

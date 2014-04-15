@@ -132,7 +132,7 @@ function experiment_tsm_kf2_wrf(wrf_file,filter_type,stop_da_at)
 
     % for each timepoint in Ts
     conv_failures = 0;
-    for t=2:length(Ts)
+    for t=2:4:length(Ts)
 
         neg_tsmc = 0;
         neg_tsm = 0;
@@ -167,14 +167,15 @@ function experiment_tsm_kf2_wrf(wrf_file,filter_type,stop_da_at)
                 ri = rain(i,j,t);
                 dt = (Ts(t)-Ts(t-1))*86400;
                 Pi = squeeze(P(i,j,:,:));
+                mi = squeeze(ms(i,j,:));
                 if(filter_type==2)
                     f = @(x,w) moisture_model_ext2(Tk,ed2,ew2,x,ri,dt,1e10,mS,mrk,mr0,mTrk) + w;
-                    [mi,sqrtPi,sigma_f] = ukf_forecast_general(squeeze(ms(i,j,:)),f,Pi,Qphr*dt/3600,1,kappa);
+                    [mi,sqrtPi,sigma_f] = ukf_forecast_general(mi,f,Pi,Qphr*dt/3600,1,kappa);
                     sigma_fs(i,j,:,:) = sigma_f;
                     sqrtP(i,j,:,:) = sqrtPi;
                     Pi = sqrtPi*sqrtPi';
                 elseif(filter_type==1)
-                    [mi,Pi] = ekf_forecast2(Tk,ed2,ew2,squeeze(ms(i,j,:)),ri,dt,1e10,Pi,Qphr,mS,mrk,mr0,mTrk);
+                    [mi,Pi] = ekf_forecast2(Tk,ed2,ew2,squeeze(mi,ri,dt,1e10,Pi,Qphr,mS,mrk,mr0,mTrk);
                 else
                     error('Invalid filter type');
                 end

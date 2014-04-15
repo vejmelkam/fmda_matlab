@@ -29,7 +29,7 @@
 %            Jm_ext - the Jacobian of the nonlinear model at previous (m_ext)
 %
 
-function Jm_ext = moisture_tangent_model_ext(Tk, Ew, Ed, m_ext, r, dt, assim_decay_tlag)
+function Jm_ext = moisture_tangent_model_ext(Tk, Ew, Ed, m_ext, r, dt)
 
     k = length(Tk);                 % number of fuel classes
     r0 = 0.05;                      % threshold rainfall [mm/h]

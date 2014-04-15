@@ -95,11 +95,13 @@ function [errs,aerrs] = forecast_ability_station_data(year,t_init,t_fcast,step)
 
     eamean = nanmean(all_abs_ekfs)';
     uamean = nanmean(all_abs_ukfs)';
+    namean = nanmean(all_abs_nfs)';
     emean = nanmean(all_ekfs)';
     umean = nanmean(all_ukfs)';
+    nmean = nanmean(all_nfs)';
 
-    errs = [emean,umean];
-    aerrs = [eamean,uamean];
+    errs = [emean,umean,nmean];
+    aerrs = [eamean,uamean,namean];
 
 end
 

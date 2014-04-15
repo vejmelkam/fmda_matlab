@@ -74,17 +74,17 @@ function [tm,fm10s,m_ekfs,m_ukfs,m_nfs] = compare_forecast_vs_kf(sd,from,t_init,
         
         % compute real world inputs
         dt = (tdays(from+i) - tdays(from+i-1)) * 86400;
-        Ed2 = (Ed(from+i)+Ed(from+i-1))/2;
-        Ew2 = (Ew(from+i)+Ew(from+i-1))/2;
+        Ed2 = 0.5*(Ed(from+i)+Ed(from+i-1));
+        Ew2 = 0.5*(Ew(from+i)+Ew(from+i-1));
 
         % retrieve observation
         d = sd.fm10(from+i);
         R = sd.fm10_var(from+i);
         
         % run forecasts (uses Colorado 2012 best fits)
-        m_nf  = moisture_model_ext2(Tk,Ed2,Ew2,m_nf,sd.rain(from+i),dt,mS,mrk,mr0,mTrk);
-        [m_ekf,P_ekf] = ekf_forecast2(Tk,Ed2,Ew2,m_ekf,sd.rain(from+i),dt,P_ekf,Qphr,mS,mrk,mr0,mTrk);
-        f = @(x,w) moisture_model_ext2(Tk,Ed2,Ew2,x,sd.rain(from+i),dt,mS,mrk,mr0,mTrk) + w;
+        m_nf  = moisture_model_ext2(Tk,Ed2,Ew2,m_nf,sd.rain(from+i),dt,mS,mrk,mr0,mTrk,mdE);
+        [m_ekf,P_ekf] = ekf_forecast2(Tk,Ed2,Ew2,m_ekf,sd.rain(from+i),dt,P_ekf,Qphr,mS,mrk,mr0,mTrk,mdE);
+        f = @(x,w) moisture_model_ext2(Tk,Ed2,Ew2,x,sd.rain(from+i),dt,mS,mrk,mr0,mTrk,mdE) + w;
         [m_ukf,sqrtP,sigma_f] = ukf_forecast_general(m_ukf,f,P_ukf,Qphr*dt/3600,1,kappa);
         
         if(rem(i,step)==0)
@@ -106,9 +106,9 @@ function [tm,fm10s,m_ekfs,m_ukfs,m_nfs] = compare_forecast_vs_kf(sd,from,t_init,
         Ed2 = (Ed(from+i)+Ed(from+i-1))/2;
         Ew2 = (Ew(from+i)+Ew(from+i-1))/2;
         
-        m_ekf = moisture_model_ext2(Tk,Ed2,Ew2,m_ekf,sd.rain(from+i),dt,mS,mrk,mr0,mTrk);
-        m_ukf = moisture_model_ext2(Tk,Ed2,Ew2,m_ukf,sd.rain(from+i),dt,mS,mrk,mr0,mTrk);
-        m_nf = moisture_model_ext2(Tk,Ed2,Ew2,m_nf,sd.rain(from+i),dt,mS,mrk,mr0,mTrk);
+        m_ekf = moisture_model_ext2(Tk,Ed2,Ew2,m_ekf,sd.rain(from+i),dt,mS,mrk,mr0,mTrk,mdE);
+        m_ukf = moisture_model_ext2(Tk,Ed2,Ew2,m_ukf,sd.rain(from+i),dt,mS,mrk,mr0,mTrk,mdE);
+        m_nf = moisture_model_ext2(Tk,Ed2,Ew2,m_nf,sd.rain(from+i),dt,mS,mrk,mr0,mTrk,mdE);
         
         m_ekfs(i) = m_ekf(2);
         m_ukfs(i) = m_ukf(2);

@@ -75,7 +75,7 @@ function [m_ext, model_ids] = moisture_model_ext2(Tk, Ed, Ew, m_ext, r, dt,S,rk,
     % select appropriate integration method (small change -> big errors in
     % the standard solution)
     changes = dt * rlags;
-    for i=1:k
+    for i=1:k+1
         if(changes(i) > 0.01)
             m_ext(i) = m_ext(i) + (equi(i) - m_ext(i)) * (1 - exp(-changes(i)));
         else

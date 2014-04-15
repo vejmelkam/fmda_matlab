@@ -117,10 +117,10 @@ function Jm_ext = moisture_tangent_model_ext(Tk, Ew, Ed, m_ext, r, dt)
     end
     
     % the equilibrium constants 
-    Jm_ext(k+1, k+1) = 1.0;
-%     if(change(k+1) > 0.01)
-%         Jm_ext(k+1,k+1) = exp(-change(k+1));
-%     else
-%         Jm_ext(k+1,k+1) = 1.0 - change(k+1) * (1 - 0.5 * change(k+1));
-%     end
+%    Jm_ext(k+1, k+1) = 1.0;
+    if(change(k+1) > 0.01)
+        Jm_ext(k+1,k+1) = exp(-change(k+1));
+    else
+        Jm_ext(k+1,k+1) = 1.0 - change(k+1) * (1 - 0.5 * change(k+1));
+    end
     Jm_ext(k+2, k+2) = 1.0;

@@ -93,12 +93,12 @@ function experiment_model_wrf(wrf_file)
     sds = sds(1:Nst);
     
     % initialize all models
-    ms = zeros(Nlon,Nlat,M);
-    for i=1:Nlon
-        for j=1:Nlat
-            ms(i,j,1:3) = 0.5*(ew(i,j,1)+ed(i,j,1));
-            ms(i,j,4) = mdE;
-        end
+    ms = zeros(Nst,M);
+    for s=1:Nst
+        i = sds{s}.glon;
+        j = sds{s}.glat;
+        ms(s,1:3) = 0.5*(ew(i,j,1)+ed(i,j,1));
+        ms(s,4) = mdE;
     end        
 
     % diagnostic variables at station locations
@@ -124,21 +124,6 @@ function experiment_model_wrf(wrf_file)
         sts_per_time(t) = Nst;
         
         fprintf('time[%d]=%10.3f: sts=%d\n',t,Ts(t),Nst);
-
-        % execute forecast procedure (for each filter) of the model to the
-        % current time point using WRF environmental variables
-        for i=1:Nlon
-            for j=1:Nlat
-                ed2 = 0.5 * (ed(i,j,t)+ed(i,j,t-1));
-                ew2 = 0.5 * (ew(i,j,t)+ew(i,j,t-1));
-                ri = rain(i,j,t);
-                dt = (Ts(t)-Ts(t-1))*86400;
-                mi = moisture_model_ext2(Tk,ed2,ew2,squeeze(ms(i,j,:)),ri,dt,mS,mrk,mr0,mTrk);
-                neg_fcast = neg_fcast + (mi(1:3) < 0);
-                mi(mi < 0) = 0;
-                ms(i,j,:) = mi';
-            end
-        end
         
         if(any(neg_fcast>0))
             warning('Negative moistures [%d,%d,%d] found at in forecast at time [%d]=%g, corrected to zero',...
@@ -149,8 +134,18 @@ function experiment_model_wrf(wrf_file)
         for s=1:Nst
             i = sds{s}.glon;
             j = sds{s}.glat;
+            
+            ed2 = 0.5 * (ed(i,j,t)+ed(i,j,t-1));
+            ew2 = 0.5 * (ew(i,j,t)+ew(i,j,t-1));
+            ri = rain(i,j,t);
+            dt = (Ts(t)-Ts(t-1))*86400;
+            mi = moisture_model_ext2(Tk,ed2,ew2,ms(s,:)',ri,dt,mS,mrk,mr0,mTrk);
+            neg_fcast = neg_fcast + (mi(1:3) < 0);
+            mi(mi < 0) = 0;
+            ms(s,:) = mi';
+            
             fm10_tgt(t,s) = fm10o(s);
-            fm10_model(t,s,:) = ms(i,j,:);
+            fm10_model(t,s,:) = ms(s,:);
         end
     end
             

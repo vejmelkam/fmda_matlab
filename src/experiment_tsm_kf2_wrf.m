@@ -107,16 +107,16 @@ function experiment_tsm_kf2_wrf(wrf_file,filter_type,stop_da_at)
     sds = sds(1:Nst);
     
     % initialize all models
-    ms = zeros(Nlon,Nlat,M);
-    P = zeros(Nlon,Nlat,M,M);
-    sigma_fs = zeros(Nlon,Nlat,2*M+1,2*(2*M+1)+1);
-    sqrtP = zeros(Nlon,Nlat,M,2*(2*M+1)+1);
-    for i=1:Nlon
-        for j=1:Nlat
-            P(i,j,:,:) = 0.01 * eye(M);
-            ms(i,j,1:3) = 0.5*(ew(i,j,1)+ed(i,j,1));
-            ms(i,j,4) = mdE;
-        end
+    ms = zeros(Nst,M);
+    P = zeros(Nst,M,M);
+    sigma_fs = zeros(Nst,2*M+1,2*(2*M+1)+1);
+    sqrtP = zeros(Nst,M,2*(2*M+1)+1);
+    for s=1:Nst
+        i = sds{s}.glon;
+        j = sds{s}.glat;
+        P(s,:,:) = 0.01 * eye(M);
+        ms(s,1:3) = 0.5*(ew(i,j,1)+ed(i,j,1));
+        ms(s,4) = mdE;
     end        
 
     % diagnostic variables at station locations
@@ -132,7 +132,7 @@ function experiment_tsm_kf2_wrf(wrf_file,filter_type,stop_da_at)
 
     % for each timepoint in Ts
     conv_failures = 0;
-    for t=2:4:length(Ts)
+    for t=2:length(Ts)
 
         neg_tsmc = 0;
         neg_tsm = 0;
@@ -158,40 +158,41 @@ function experiment_tsm_kf2_wrf(wrf_file,filter_type,stop_da_at)
 
         % execute forecast procedure (for each filter) of the model to the
         % current time point using WRF environmental variables
-        for i=1:Nlon
-            for j=1:Nlat
-                ed2 = 0.5 * (ed(i,j,t)+ed(i,j,t-1));
-                ew2 = 0.5 * (ew(i,j,t)+ew(i,j,t-1));
-                assert(ed2 > 0);
-                assert(ew2 > 0);
-                ri = rain(i,j,t);
-                dt = (Ts(t)-Ts(t-1))*86400;
-                Pi = squeeze(P(i,j,:,:));
-                mi = squeeze(ms(i,j,:));
-                if(filter_type==2)
-                    f = @(x,w) moisture_model_ext2(Tk,ed2,ew2,x,ri,dt,1e10,mS,mrk,mr0,mTrk) + w;
-                    [mi,sqrtPi,sigma_f] = ukf_forecast_general(mi,f,Pi,Qphr*dt/3600,1,kappa);
-                    sigma_fs(i,j,:,:) = sigma_f;
-                    sqrtP(i,j,:,:) = sqrtPi;
-                    Pi = sqrtPi*sqrtPi';
-                elseif(filter_type==1)
-                    [mi,Pi] = ekf_forecast2(Tk,ed2,ew2,squeeze(mi,ri,dt,1e10,Pi,Qphr,mS,mrk,mr0,mTrk);
-                else
-                    error('Invalid filter type');
-                end
-                if(any(isnan(Pi)))
-                    Pi
-                    error('nans found in forecast covariance at (%d,%d)',i,j);
-                end
-                if(any(eig(Pi) < 0))
-                    Pi
-                    error('negative eigenvalues in forecast covariance at (%d,%d)',i,j);
-                end
-                neg_fcast = neg_fcast + (mi(1:3) < 0);
-                mi(mi < 0) = 0;
-                ms(i,j,:) = mi';
-                P(i,j,:,:) = Pi;
+        for s=1:Nst
+            i = sds{s}.glon;
+            j = sds{s}.glat;
+
+            ed2 = 0.5 * (ed(i,j,t)+ed(i,j,t-1));
+            ew2 = 0.5 * (ew(i,j,t)+ew(i,j,t-1));
+            assert(ed2 > 0);
+            assert(ew2 > 0);
+            ri = rain(i,j,t);
+            dt = (Ts(t)-Ts(t-1))*86400;
+            Pi = squeeze(P(s,:,:));
+            mi = ms(s,:)';
+            if(filter_type==2)
+                f = @(x,w) moisture_model_ext2(Tk,ed2,ew2,x,ri,dt,mS,mrk,mr0,mTrk,mdE) + w;
+                [mi,sqrtPi,sigma_f] = ukf_forecast_general(mi,f,Pi,Qphr*dt/3600,1,kappa);
+                sigma_fs(s,:,:) = sigma_f;
+                sqrtP(s,:,:) = sqrtPi;
+                Pi = sqrtPi*sqrtPi';
+            elseif(filter_type==1)
+                [mi,Pi] = ekf_forecast2(Tk,ed2,ew2,mi,ri,dt,Pi,Qphr,mS,mrk,mr0,mTrk,mdE);
+            else
+                error('Invalid filter type');
             end
+            if(any(isnan(Pi)))
+                Pi
+                error('nans found in forecast covariance at (%d,%d)',i,j);
+            end
+            if(any(eig(Pi) < 0))
+                Pi
+                error('negative eigenvalues in forecast covariance at (%d,%d)',i,j);
+            end
+            neg_fcast = neg_fcast + (mi(1:3) < 0);
+            mi(mi(1:3) < 0) = 0;
+            ms(s,:) = mi';
+            P(s,:,:) = Pi;
         end
         
         if(any(neg_fcast>0))
@@ -210,7 +211,7 @@ function experiment_tsm_kf2_wrf(wrf_file,filter_type,stop_da_at)
             i = std.glon;
             j = std.glat;
             Nobs = Nobs + 1;
-            X(Nobs,:) = [ms(i,j,2),1,hgt(i,j)/2000,rain(i,j,t)];
+            X(Nobs,:) = [ms(o,2),1,hgt(i,j)/2000,rain(i,j,t)];
             Z(Nobs) = fm10o(o);
             G(Nobs) = fm10v(o);
             fm10_tgt(t,o) = fm10o(o);
@@ -238,13 +239,15 @@ function experiment_tsm_kf2_wrf(wrf_file,filter_type,stop_da_at)
         % result by the unconstrained solver (as it would in an operational
         % system)
         if(Nobs > 0)
-            Xe = zeros(size(X,1)+400,4);
-            for z=size(X,1)+1:size(Xe,1)
-                i = randi(Nlon);
-                j = randi(Nlat);
-                Xe(z,:) = [ms(i,j,2),1,hgt(i,j)/2000,rain(i,j,t)];
-            end
-            Xe = Xe(:,1:size(X,2));
+%             Xe = zeros(size(X,1)+400,4);
+%             for z=size(X,1)+1:size(Xe,1)
+%                 
+%                 i = randi(Nlon);
+%                 j = randi(Nlat);
+%                 Xe(z,:) = [ms(z,2),1,hgt(i,j)/2000,rain(i,j,t)];
+%             end
+            Xe = X;
+%            Xe = Xe(:,1:size(X,2));
             [beta,sigma2] = estimate_tsm_parameters(X,Z,G);
             [betac,sigma2c] = estimate_tsm_parameters_constr(X,Z,G,Xe,0.6);
             if(isnan(sigma2c))
@@ -263,42 +266,47 @@ function experiment_tsm_kf2_wrf(wrf_file,filter_type,stop_da_at)
                 warning('XSX is badly conditioned!');
                 [X,Z,G]
             end
+            
+            if(rcond(XSXc) < 1e-16)
+                warning('XSXc is badly conditioned!');
+                [X,Z,G]
+            end
 
             % run update step on all stations
             if(t <= stop_da_at)
-                for i=1:Nlon
-                    for j=1:Nlat
-                        xr = [ms(i,j,2),1,hgt(i,j)/2000,rain(i,j,t)]';
-                        xr = xr(1:size(X,2));
-                        if(xr' * beta < 0), neg_tsm = neg_tsm + 1; end
-                        if(xr' * betac < 0), neg_tsmc = neg_tsmc + 1; end
+                for s=1:Nst
+                    i = sds{s}.glon;
+                    j = sds{s}.glat;
+                    xr = [ms(s,2),1,hgt(i,j)/2000,rain(i,j,t)]';
+                    xr = xr(1:size(X,2));
+                    if(xr' * beta < 0), neg_tsm = neg_tsm + 1; end
+                    if(xr' * betac < 0), neg_tsmc = neg_tsmc + 1; end
                         
-                        % run 
-                        xpseudo = min(max(xr' * betac,0),0.6);
-                        varpseudo = sigma2c + xr' * (XSXc\xr);
-                        
-                        if(filter_type==2)
-                            sqrtPo = squeeze(sqrtP(i,j,:,:));
-                            sigma_f = squeeze(sigma_fs(i,j,:,:));
-                            [ms(i,j,:),P(i,j,:,:)] = ukf_update(squeeze(ms(i,j,:)),sqrtPo,sigma_f,[0,1,0,0,0],xpseudo,varpseudo,kappa);
-                        elseif(filter_type==1)
-                            Po = squeeze(P(i,j,:,:));
-                            [ms(i,j,:),P(i,j,:,:)] = ekf_update(squeeze(ms(i,j,:)),Po,[0,1,0,0,0],xpseudo,varpseudo);
-                        else
-                            error('Invalid filter type');
-                        end
+                    % construct tsm prediction 
+                    xpseudo = min(max(xr' * betac,0),0.6);
+                    varpseudo = sigma2c + xr' * (XSXc\xr);
+                    
+                    if(filter_type==2)
+                        sqrtPo = squeeze(sqrtP(s,:,:));
+                        sigma_f = squeeze(sigma_fs(s,:,:));
+                        [ms(s,:),P(s,:,:)] = ukf_update(ms(s,:)',sqrtPo,sigma_f,[0,1,0,0,0],xpseudo,varpseudo,kappa);
+                    elseif(filter_type==1)
+                        Po = squeeze(P(s,:,:));
+                        [ms(s,:),P(s,:,:)] = ekf_update(ms(s,:)',Po,[0,1,0,0,0],xpseudo,varpseudo);
+                    else
+                        error('Invalid filter type');
+                    end
 
-                    if(any(isnan(P(i,j,:,:))))
-                        squeeze(P(i,j,:,:))
+                    if(any(isnan(P(s,:,:))))
+                        squeeze(P(s,:,:))
                         error('nans found in updated covariance at (%d,%d)',i,j);
                     end
-                    if(any(eig(squeeze(P(i,j,:,:))) < 0))
-                        squeeze(P(i,j,:,:))
+                    if(any(eig(squeeze(P(s,:,:))) < 0))
+                        squeeze(P(s,:,:))
                         error('negative eigenvalues found in updated covariance at (%d,%d)',i,j);
                     end
-                    end
                     % check for negative moistures
-                    if(any(ms(i,j,1:3) < 0))
+                    if(any(ms(s,1:3) < 0))
                         ms
                         warning('negative moisture post-assimilation at (%d,%d) at time [%d] %g',i,j,t,Ts(t));
                     end
@@ -309,7 +317,7 @@ function experiment_tsm_kf2_wrf(wrf_file,filter_type,stop_da_at)
             for s=1:Nst
                 i = sds{s}.glon;
                 j = sds{s}.glat;
-                xr = [ms(i,j,2),1,hgt(i,j)/2000,rain(i,j,t)]';
+                xr = [ms(s,2),1,hgt(i,j)/2000,rain(i,j,t)]';
                 xr = xr(1:size(X,2));
 
                 fm10_tsmc(t,s) = min(max(xr' * betac,0),0.6);
@@ -318,7 +326,7 @@ function experiment_tsm_kf2_wrf(wrf_file,filter_type,stop_da_at)
                 fm10_tsm(t,s) = min(max(xr' * beta,0),0.6);
                 fm10_tsm_var(t,s) = sigma2 + xr' * (XSX\xr);
 
-                fm10_model(t,s,:) = ms(i,j,:);
+                fm10_model(t,s,:) = ms(s,:);
             end
         end
         

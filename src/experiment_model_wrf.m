@@ -141,7 +141,7 @@ function experiment_model_wrf(wrf_file)
             dt = (Ts(t)-Ts(t-1))*86400;
             mi = moisture_model_ext2(Tk,ed2,ew2,ms(s,:)',ri,dt,mS,mrk,mr0,mTrk);
             neg_fcast = neg_fcast + (mi(1:3) < 0);
-            mi(mi < 0) = 0;
+            mi(mi(1:3) < 0) = 0;
             ms(s,:) = mi';
             
             fm10_tgt(t,s) = fm10o(s);

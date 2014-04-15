@@ -21,10 +21,10 @@
 %    mid    - the model id
 %
 
-function [mf,Pf,J,mid] = ekf_forecast2(Tk,Ed,Ew,m,r,dt,P,Qphr,S,rk,r0,Trk)
+function [mf,Pf,J,mid] = ekf_forecast2(Tk,Ed,Ew,m,r,dt,P,Qphr,S,rk,r0,Trk,mdE)
 
     % forecast next point
-    [mf, mid] = moisture_model_ext2(Tk,Ed,Ew,m,r,dt,S,rk,r0,Trk);
+    [mf, mid] = moisture_model_ext2(Tk,Ed,Ew,m,r,dt,S,rk,r0,Trk,mdE);
     
     % update covariance matrix using the tangent linear model
     J = moisture_tangent_model_ext(Tk,Ew,Ed,m,r,dt);

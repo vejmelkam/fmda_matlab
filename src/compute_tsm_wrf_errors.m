@@ -5,7 +5,11 @@
 % Synopsis: [sns,errs,aerrs,rmse] = compute_tsm_wrf_errors(fname,rng)
 %
 
-function [sns,errs,aerrs,rmse,Nt] = compute_tsm_wrf_errors(fname,rng)
+function [sns,errs,aerrs,rmse,Nt] = compute_tsm_wrf_errors(fname,rng,bfix)
+
+    if(nargin < 3)
+        bfix = 0;
+    end
 
     d = load(fname);
     Nst = length(d.sds);
@@ -20,7 +24,7 @@ function [sns,errs,aerrs,rmse,Nt] = compute_tsm_wrf_errors(fname,rng)
     for i=1:Nst
         sns{i} = d.sds{i}.stid;
         fm10 = d.fm10_tgt(:,i);
-        pred = d.fm10_model(:,i,2);
+        pred = d.fm10_model(:,i,2) + bfix;
         for t=1:Nr
             r = rng(t);
             if(isfinite(fm10(r)))

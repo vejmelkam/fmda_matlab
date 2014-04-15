@@ -133,7 +133,7 @@ function experiment_model_wrf(wrf_file)
                 ew2 = 0.5 * (ew(i,j,t)+ew(i,j,t-1));
                 ri = rain(i,j,t);
                 dt = (Ts(t)-Ts(t-1))*86400;
-                mi = moisture_model_ext2(Tk,ed2,ew2,squeeze(ms(i,j,:)),ri,dt,1e10,mS,mrk,mr0,mTrk);
+                mi = moisture_model_ext2(Tk,ed2,ew2,squeeze(ms(i,j,:)),ri,dt,mS,mrk,mr0,mTrk);
                 neg_fcast = neg_fcast + (mi(1:3) < 0);
                 mi(mi < 0) = 0;
                 ms(i,j,:) = mi';

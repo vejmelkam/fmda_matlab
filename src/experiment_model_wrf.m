@@ -156,7 +156,8 @@ function experiment_model_wrf(wrf_file)
             
     % dump the results to file
     save([out_dir,'/wrf_model_',out_dir,'.mat'], 'Ts','fm10_tgt','sds',...
-         'fm10_model', 'rain', 'relh', 't2', 'ew', 'ed');
+         'fm10_model', 'rain', 'relh', 't2', 'ew', 'ed',...
+         'mTrk','mS','mdE','mrk','mr0');
     
     % after all computations complete, show some pretty pictures`
     for s=1:Nst

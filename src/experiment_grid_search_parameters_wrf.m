@@ -41,7 +41,7 @@ function [sse,Nsse] = experiment_grid_search_parameters_wrf(wrf_file,stop_at_da)
     Ss = 0.2:0.2:2.0;
     rks = 1:2:14;
     r0s = 0.04:0.02:0.1;
-    Trks = 4:2:14;    
+    Trks = 4:2:14;
     
     % initial grid search
 %     dEs = -0.05:0.01:-0.03;

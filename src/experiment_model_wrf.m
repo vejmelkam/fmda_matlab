@@ -20,8 +20,6 @@ function experiment_model_wrf(wrf_file)
     glon = glon(:,:,1);
     glat = ncread(wrf_file,'XLAT');
     glat = glat(:,:,1);
-    hgt = ncread(wrf_file,'HGT');
-    hgt = hgt(:,:,1);
     rain = cat(3,zeros(size(glon)),diff(ncread(wrf_file,'RAINC'),1,3) + diff(ncread(wrf_file,'RAINNC'),1,3));
     [Nlon,Nlat] = size(glon);
     [ed,ew,relh] = equilibrium_moisture(psfc,q2,t2);
@@ -39,9 +37,6 @@ function experiment_model_wrf(wrf_file)
         relh(relh > 1) = 1;
     end
     
-    % remove any rain that is too light to affect the moisture model
-    rain(rain < 0.01) = 0;
-    
     % parse the dates
     Ts = zeros(Nt,1);
     for i=1:Nt
@@ -50,9 +45,12 @@ function experiment_model_wrf(wrf_file)
                         str2double(ti(12:13)),str2double(ti(15:16)),str2double(ti(18:19)));
         % convert rain to mm/h units
         if(i>1)
-            rain(:,:,i) = rain(:,:,i) / (Ts(i) - Ts(i-1)) * 3600;
+            rain(:,:,i) = rain(:,:,i) / ((Ts(i) - Ts(i-1)) * 24);
         end
     end
+    
+    % remove any rain that is too light to affect the moisture model
+    rain(rain < 0.01) = 0;
     
     % load data from correct year
     year = str2double(ti(1:4));
@@ -68,9 +66,14 @@ function experiment_model_wrf(wrf_file)
     out_dir = sprintf('wrf_%d%d%d_model', str2double(ti(1:4)), str2double(ti(6:7)), str2double(ti(9:10)));
     mkdir(out_dir);
     
-    % constant model parameters
+     % constant model parameters (from fit to first 10 WRF files)
     Tk = [1,10,100]';
     M = 5;
+    mS = 0.8;
+    mrk = 1;
+    mr0 = 0.08;
+    mdE = -0.07;
+    mTrk = 14;
     
     % load all station data & find closest grid point
     Nst = 0;
@@ -94,7 +97,7 @@ function experiment_model_wrf(wrf_file)
     for i=1:Nlon
         for j=1:Nlat
             ms(i,j,1:3) = 0.5*(ew(i,j,1)+ed(i,j,1));
-            ms(i,j,4) = -0.04;
+            ms(i,j,4) = mdE;
         end
     end        
 
@@ -128,11 +131,9 @@ function experiment_model_wrf(wrf_file)
             for j=1:Nlat
                 ed2 = 0.5 * (ed(i,j,t)+ed(i,j,t-1));
                 ew2 = 0.5 * (ew(i,j,t)+ew(i,j,t-1));
-                assert(ed2 > 0);
-                assert(ew2 > 0);
                 ri = rain(i,j,t);
                 dt = (Ts(t)-Ts(t-1))*86400;
-                mi = moisture_model_ext2(Tk,ed2,ew2,squeeze(ms(i,j,:)),ri,dt,1e10,0.6,2,0.08,7);
+                mi = moisture_model_ext2(Tk,ed2,ew2,squeeze(ms(i,j,:)),ri,dt,1e10,mS,mrk,mr0,mTrk);
                 neg_fcast = neg_fcast + (mi(1:3) < 0);
                 mi(mi < 0) = 0;
                 ms(i,j,:) = mi';

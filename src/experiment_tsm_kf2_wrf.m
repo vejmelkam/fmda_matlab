@@ -41,9 +41,6 @@ function experiment_tsm_kf2_wrf(wrf_file,filter_type,stop_da_at)
         relh(relh > 1) = 1;
     end
     
-    % remove any rain that is too light to affect the moisture model
-    rain(rain < 0.08) = 0;
-    
     % parse the dates
     Ts = zeros(Nt,1);
     for i=1:Nt
@@ -52,9 +49,12 @@ function experiment_tsm_kf2_wrf(wrf_file,filter_type,stop_da_at)
                         str2double(ti(12:13)),str2double(ti(15:16)),str2double(ti(18:19)));
         % convert rain to mm/h units
         if(i>1)
-            rain(:,:,i) = rain(:,:,i) / (Ts(i) - Ts(i-1)) * 3600;
+            rain(:,:,i) = rain(:,:,i) / ((Ts(i) - Ts(i-1)) * 24);
         end
     end
+    
+    % remove any rain that is too light to affect the moisture model
+    rain(rain < 0.01) = 0;
     
     % load data from correct year
     year = str2double(ti(1:4));
@@ -71,10 +71,15 @@ function experiment_tsm_kf2_wrf(wrf_file,filter_type,stop_da_at)
     out_dir = sprintf('wrf_%d%d%d_%s', str2double(ti(1:4)), str2double(ti(6:7)), str2double(ti(9:10)), flt_suffix);
     mkdir(out_dir);
     
-    % constant model parameters
+    % constant model parameters (from fit to first 10 WRF files)
     Tk = [1,10,100]';
     M = 5;
     k = 3;
+    mS = 0.8;
+    mrk = 1;
+    mr0 = 0.08;
+    mdE = -0.07;
+    mTrk = 14;
 
     % process noise matrix
     Qphr = zeros(M);
@@ -110,7 +115,7 @@ function experiment_tsm_kf2_wrf(wrf_file,filter_type,stop_da_at)
         for j=1:Nlat
             P(i,j,:,:) = 0.01 * eye(M);
             ms(i,j,1:3) = 0.5*(ew(i,j,1)+ed(i,j,1));
-            ms(i,j,4) = -0.04;
+            ms(i,j,4) = mdE;
         end
     end        
 
@@ -163,13 +168,13 @@ function experiment_tsm_kf2_wrf(wrf_file,filter_type,stop_da_at)
                 dt = (Ts(t)-Ts(t-1))*86400;
                 Pi = squeeze(P(i,j,:,:));
                 if(filter_type==2)
-                    f = @(x,w) moisture_model_ext2(Tk,ed2,ew2,x,ri,dt,1e10,0.6,2,0.08,7) + w;
+                    f = @(x,w) moisture_model_ext2(Tk,ed2,ew2,x,ri,dt,1e10,mS,mrk,mr0,mTrk) + w;
                     [mi,sqrtPi,sigma_f] = ukf_forecast_general(squeeze(ms(i,j,:)),f,Pi,Qphr*dt/3600,1,kappa);
                     sigma_fs(i,j,:,:) = sigma_f;
                     sqrtP(i,j,:,:) = sqrtPi;
                     Pi = sqrtPi*sqrtPi';
                 elseif(filter_type==1)
-                    [mi,Pi] = ekf_forecast2(Tk,ed2,ew2,squeeze(ms(i,j,:)),ri,dt,1e10,Pi,Qphr,0.6,2,0.08,7);
+                    [mi,Pi] = ekf_forecast2(Tk,ed2,ew2,squeeze(ms(i,j,:)),ri,dt,1e10,Pi,Qphr,mS,mrk,mr0,mTrk);
                 else
                     error('Invalid filter type');
                 end
@@ -210,10 +215,10 @@ function experiment_tsm_kf2_wrf(wrf_file,filter_type,stop_da_at)
             fm10_tgt(t,o) = fm10o(o);
         end
 
-        % the fourth regressor is rain intensity - if that is zero
+        % the last regressor must be rain intensity - if that is zero
         % everywhere, we remove the regressor
-        if(all(X(:,4)==0))
-            X = X(:,1:3);
+        if(all(X(:,end)==0))
+            X = X(:,1:end-1);
         end
 
         % only use the stations that we filled out (ndx-1)
@@ -240,18 +245,18 @@ function experiment_tsm_kf2_wrf(wrf_file,filter_type,stop_da_at)
             end
             Xe = Xe(:,1:size(X,2));
             [beta,sigma2] = estimate_tsm_parameters(X,Z,G);
-           [betac,sigma2c] = estimate_tsm_parameters_constr(X,Z,G,Xe,0.6);
-           if(isnan(sigma2c))
+            [betac,sigma2c] = estimate_tsm_parameters_constr(X,Z,G,Xe,0.6);
+            if(isnan(sigma2c))
                sigma2c = sigma2;
                betac = beta;
                conv_failures = conv_failures + 1;
-           end
-           betas(t) = beta(1);
-           betasc(t) = betac(1);
+            end
+            betas(t) = beta(1);
+            betasc(t) = betac(1);
 
             % compute X'Sigma^{-1}*X
             XSX = (X'*diag(1./(sigma2+G))*X);
-           XSXc = (X'*diag(1./(sigma2c+G))*X);
+            XSXc = (X'*diag(1./(sigma2c+G))*X);
 
             if(rcond(XSX) < 1e-16)
                 warning('XSX is badly conditioned!');
@@ -265,11 +270,11 @@ function experiment_tsm_kf2_wrf(wrf_file,filter_type,stop_da_at)
                         xr = [ms(i,j,2),1,hgt(i,j)/2000,rain(i,j,t)]';
                         xr = xr(1:size(X,2));
                         if(xr' * beta < 0), neg_tsm = neg_tsm + 1; end
-                       if(xr' * betac < 0), neg_tsmc = neg_tsmc + 1; end
+                        if(xr' * betac < 0), neg_tsmc = neg_tsmc + 1; end
                         
                         % run 
-                        xpseudo = min(max(xr' * beta,0),0.6);
-                        varpseudo = sigma2 + xr' * (XSX\xr);
+                        xpseudo = min(max(xr' * betac,0),0.6);
+                        varpseudo = sigma2c + xr' * (XSXc\xr);
                         
                         if(filter_type==2)
                             sqrtPo = squeeze(sqrtP(i,j,:,:));
@@ -306,7 +311,7 @@ function experiment_tsm_kf2_wrf(wrf_file,filter_type,stop_da_at)
                 xr = [ms(i,j,2),1,hgt(i,j)/2000,rain(i,j,t)]';
                 xr = xr(1:size(X,2));
 
-                fm10_tsmc(t,s) = xr' * betac;
+                fm10_tsmc(t,s) = min(max(xr' * betac,0),0.6);
                 fm10_tsmc_var(t,s) = sigma2c + xr' * (XSXc\xr);
 
                 fm10_tsm(t,s) = min(max(xr' * beta,0),0.6);
@@ -341,7 +346,7 @@ function experiment_tsm_kf2_wrf(wrf_file,filter_type,stop_da_at)
         set(f1,'papersize',[18,6])        
         set(f1,'paperposition',[0,0,18,6]);
 
-        subplot(311);
+        subplot(411);
         plot([tsb,tsb,tsb,tsb],[fm10_tgt(:,s),fm10_tsm(:,s),fm10_tsmc(:,s),fm10_model(:,s,2)],'linewidth',1.2); 
         hold on;
         plot([tsb(stop_da_at),tsb(stop_da_at)],[0,max(fm10_tgt(:,s))],'k-','linewidth',2);
@@ -350,16 +355,21 @@ function experiment_tsm_kf2_wrf(wrf_file,filter_type,stop_da_at)
         title([sd_s.stid,': Observation tracking & forecasting']);
         ylabel('fm10 [-]');
         
-        subplot(312);
+        subplot(412);
         plot([tsb,tsb],[sd_s.rain,rain_ij],'linewidth',1.2);
         legend('st. rain','wrf rain');
         ylabel('Rain [mm/h]');
 
-        subplot(313);
+        subplot(413);
         plot([tsb,tsb],[sd_s.ews,ew_ij]);
         legend('station Ew', 'WRF Ew');
         ylabel('equilibrium [g/100g]');
         xlabel('Time [days from 1.1]');
+        
+        subplot(414);
+        plot(tsb,fm10_model(:,s,4),'linewidth',1.2);
+        title([sd_s.stid,': Equilibrium adjustment']);
+        ylabel('dE [-]');
         
         print('-dpng', [out_dir,'/',out_dir,'_',sd_s.stid,'_tsm2_vs_time_',flt_suffix]);
 

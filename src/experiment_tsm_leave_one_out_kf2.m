@@ -29,10 +29,12 @@ function out = experiment_tsm_leave_one_out_kf2(station_start,station_skip,year,
     % process noise matrix
     Qphr = zeros(M);
     Qphr(1:k, 1:k) = diag([0.0005,0.00005,0.00001]);
-    Qphr(k+1,k+1) = 0.0001;
-    Qphr(k+2,k+2) = 0.0001;
+    Qphr(k+1,k+1) = 0.00005;
+    Qphr(k+2,k+2) = 0.00005;
     
     kappa = 0;
+    
+    if filter_type==1, filter_suffix='ekf'; else filter_suffix='ukf'; end
     
     % load all station data
     for i=1:N
@@ -67,6 +69,8 @@ function out = experiment_tsm_leave_one_out_kf2(station_start,station_skip,year,
         for i=1:N
             ndxs = find_valid_obs(120,sds(i));
             P(i,:,:) = 0.01 * eye(M);
+            P(i,4,4) = 0.0001;
+            P(i,5,5) = 0.0001;
             if(isfinite(ndxs))
                 ms(i,1:3) = 0.5*(sds{i}.ew(ndxs(1))+sds{i}.ed(ndxs(1)));
                 ms(i,4) = -0.04;
@@ -77,6 +81,7 @@ function out = experiment_tsm_leave_one_out_kf2(station_start,station_skip,year,
         fprintf('Initialized %d models out of %d\n', sum(m_init), N);
 
         % for each (hourly) timepoint in Ts
+        R2 = zeros(length(Ts),1);
         iter_ndx = 1;
         conv_failures = 0;
         for t=2:length(Ts)
@@ -110,13 +115,13 @@ function out = experiment_tsm_leave_one_out_kf2(station_start,station_skip,year,
                     end
                     Pi = squeeze(P(i,:,:));
                     if(filter_type==2)
-                        f = @(x,w) moisture_model_ext2(Tk,ed,ew,x,ri,dt,1e10,0.6,2,0.08,7) + w;
+                        f = @(x,w) moisture_model_ext2(Tk,ed,ew,x,ri,dt,0.6,2,0.08,7) + w;
                         [mi,sqrtPi,sigma_f] = ukf_forecast_general(ms(i,:)',f,Pi,Qphr*dt/3600,1,kappa);
                         sigma_fs(i,:,:) = sigma_f;
                         sqrtP(i,:,:) = sqrtPi;
                         Pi = sqrtPi*sqrtPi';
                     elseif(filter_type==1)
-                        [mi,Pi] = ekf_forecast2(Tk,ed,ew,ms(i,:)',ri,dt,1e10,Pi,Qphr,0.6,2,0.08,7);
+                        [mi,Pi] = ekf_forecast2(Tk,ed,ew,ms(i,:)',ri,dt,Pi,Qphr,0.6,2,0.08,7);
                     else
                         error('Invalid filter type');
                     end
@@ -207,6 +212,8 @@ function out = experiment_tsm_leave_one_out_kf2(station_start,station_skip,year,
                 end
                 betas(iter_ndx) = beta(1);
                 betasc(iter_ndx) = betac(1);
+                
+                R2(t) = 1 - sum((X*betac-Z).^2)/sum((Z - mean(Z)).^2);
 
                 % compute X'Sigma^{-1}*X
                 XSX = (X'*diag(1./(sigma2+G))*X);
@@ -326,7 +333,7 @@ function out = experiment_tsm_leave_one_out_kf2(station_start,station_skip,year,
             xlabel('Time [days from 1.1]');
             ylabel('fm10 [-]');
 
-            print('-dpng', [station_code,'_',years,'_tsm2_vs_time_kf']);
+            print('-dpng', [station_code,'_',years,'_tsm2_vs_time_',filter_suffix]);
 
             f2 = figure();
             set(f2,'units','centimeters');
@@ -367,8 +374,8 @@ function out = experiment_tsm_leave_one_out_kf2(station_start,station_skip,year,
             xlabel('abs. error [-]');
             ylabel('stdev [-]');
 
-            print('-dpng', [station_code,'_',years,'_tsm2_scatters_kf']);
-
+            print('-dpng', [station_code,'_',years,'_tsm2_scatters_',filter_suffix]);
+            
         end
 
         % report
@@ -381,7 +388,7 @@ function out = experiment_tsm_leave_one_out_kf2(station_start,station_skip,year,
         
         % dump the results to file
         sdsz = sds{z};
-        save([station_code,'_',years,'_tsm2_loo.mat'],'loo_tm','loo_tsm','loo_tsmc','loo_tgt','betas', 'betasc','sdsz','loo_var','loo_varc');
+        save([station_code,'_',years,'_tsm2_loo_',filter_suffix,'.mat'],'loo_tm','loo_tsm','loo_tsmc','loo_tgt','betas', 'betasc','sdsz','loo_var','loo_varc');
 
     end
 end

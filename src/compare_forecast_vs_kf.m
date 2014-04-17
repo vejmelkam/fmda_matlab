@@ -40,13 +40,17 @@ function [tm,fm10s,m_ekfs,m_ukfs,m_nfs] = compare_forecast_vs_kf(sd,from,t_init,
 
     % initialize covariance
     P_ukf = eye(M) * 0.01;   % error covariance of the initial guess UKF
+    P_ukf(4,4) = 0.0001;
+    P_ukf(5,5) = 0.0001;
     P_ekf = eye(M) * 0.01;   % error covariance of the initial guess EKF
+    P_ekf(4,4) = 0.0001;
+    P_ekf(5,5) = 0.0001;
 
     % Kalman filter Q (model error covariance)
     Qphr = zeros(M);
     Qphr(1:k, 1:k) = diag([0.0005,0.00005,0.00001]);
-    Qphr(k+1,k+1) = 0.0001;
-    Qphr(k+2,k+2) = 0.0001;
+    Qphr(k+1,k+1) = 0.00005;
+    Qphr(k+2,k+2) = 0.00005;
 
     % the observation operator is a n_k x Ndim matrix with I_(n_k) on the left
     H = zeros(1,k+2);
@@ -82,9 +86,9 @@ function [tm,fm10s,m_ekfs,m_ukfs,m_nfs] = compare_forecast_vs_kf(sd,from,t_init,
         R = sd.fm10_var(from+i);
         
         % run forecasts (uses Colorado 2012 best fits)
-        m_nf  = moisture_model_ext2(Tk,Ed2,Ew2,m_nf,sd.rain(from+i),dt,mS,mrk,mr0,mTrk,mdE);
-        [m_ekf,P_ekf] = ekf_forecast2(Tk,Ed2,Ew2,m_ekf,sd.rain(from+i),dt,P_ekf,Qphr,mS,mrk,mr0,mTrk,mdE);
-        f = @(x,w) moisture_model_ext2(Tk,Ed2,Ew2,x,sd.rain(from+i),dt,mS,mrk,mr0,mTrk,mdE) + w;
+        m_nf  = moisture_model_ext2(Tk,Ed2,Ew2,m_nf,sd.rain(from+i),dt,mS,mrk,mr0,mTrk);
+        [m_ekf,P_ekf] = ekf_forecast2(Tk,Ed2,Ew2,m_ekf,sd.rain(from+i),dt,P_ekf,Qphr,mS,mrk,mr0,mTrk);
+        f = @(x,w) moisture_model_ext2(Tk,Ed2,Ew2,x,sd.rain(from+i),dt,mS,mrk,mr0,mTrk) + w;
         [m_ukf,sqrtP,sigma_f] = ukf_forecast_general(m_ukf,f,P_ukf,Qphr*dt/3600,1,kappa);
         
         if(rem(i,step)==0)
@@ -106,9 +110,9 @@ function [tm,fm10s,m_ekfs,m_ukfs,m_nfs] = compare_forecast_vs_kf(sd,from,t_init,
         Ed2 = (Ed(from+i)+Ed(from+i-1))/2;
         Ew2 = (Ew(from+i)+Ew(from+i-1))/2;
         
-        m_ekf = moisture_model_ext2(Tk,Ed2,Ew2,m_ekf,sd.rain(from+i),dt,mS,mrk,mr0,mTrk,mdE);
-        m_ukf = moisture_model_ext2(Tk,Ed2,Ew2,m_ukf,sd.rain(from+i),dt,mS,mrk,mr0,mTrk,mdE);
-        m_nf = moisture_model_ext2(Tk,Ed2,Ew2,m_nf,sd.rain(from+i),dt,mS,mrk,mr0,mTrk,mdE);
+        m_ekf = moisture_model_ext2(Tk,Ed2,Ew2,m_ekf,sd.rain(from+i),dt,mS,mrk,mr0,mTrk);
+        m_ukf = moisture_model_ext2(Tk,Ed2,Ew2,m_ukf,sd.rain(from+i),dt,mS,mrk,mr0,mTrk);
+        m_nf = moisture_model_ext2(Tk,Ed2,Ew2,m_nf,sd.rain(from+i),dt,mS,mrk,mr0,mTrk);
         
         m_ekfs(i) = m_ekf(2);
         m_ukfs(i) = m_ukf(2);

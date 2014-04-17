@@ -32,7 +32,7 @@
 %                      (1 - drying, 2 - wetting, 3 - rain, 4 - dead zone)
 %
 
-function [m_ext, model_ids] = moisture_model_ext2(Tk, Ed, Ew, m_ext, r, dt,S,rk,r0,Trk,mdE)
+function [m_ext, model_ids] = moisture_model_ext2(Tk, Ed, Ew, m_ext, r, dt,S,rk,r0,Trk)
 
     k = length(Tk);                 % number of fuel classes
     Trk = Trk * 3600;               % time constant for wetting model [s]
@@ -48,9 +48,7 @@ function [m_ext, model_ids] = moisture_model_ext2(Tk, Ed, Ew, m_ext, r, dt,S,rk,
     % where rainfall is above threshold (spatially different), apply
     % saturation model, equi and rlag are specific to fuel type and
     % location
-    equi = zeros(k+1,1);
-    equi(1:k) = m;
-    equi(k+1) = mdE;
+    equi = m;
     rlags = zeros(k+1,1);
     model_ids = zeros(k,1);
     
@@ -69,13 +67,10 @@ function [m_ext, model_ids] = moisture_model_ext2(Tk, Ed, Ew, m_ext, r, dt,S,rk,
         equi(m > Ed) = Ed;
     end
     
-    % experimental 5hrs time constant for return to mean dE
-    rlags(k+1) = 1.0 / (5 * 3600);
-    
     % select appropriate integration method (small change -> big errors in
     % the standard solution)
     changes = dt * rlags;
-    for i=1:k+1
+    for i=1:k
         if(changes(i) > 0.01)
             m_ext(i) = m_ext(i) + (equi(i) - m_ext(i)) * (1 - exp(-changes(i)));
         else

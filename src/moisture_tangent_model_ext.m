@@ -29,12 +29,10 @@
 %            Jm_ext - the Jacobian of the nonlinear model at previous (m_ext)
 %
 
-function Jm_ext = moisture_tangent_model_ext(Tk, Ew, Ed, m_ext, r, dt)
+function Jm_ext = moisture_tangent_model_ext(Tk,Ew,Ed,m_ext,r,dt,rk,r0,Trk)
 
     k = length(Tk);                 % number of fuel classes
-    r0 = 0.05;                      % threshold rainfall [mm/h]
-    rk = 8;                         % saturation rain intensity [mm/h]
-    Trk = 14 * 3600;                % time constant for wetting model [s]
+    Trk = Trk * 3600;               % time constant for wetting model [hr]->[s]
     
     % first, we break the state vector into components
     m = m_ext(1:k);
@@ -61,8 +59,6 @@ function Jm_ext = moisture_tangent_model_ext(Tk, Ew, Ed, m_ext, r, dt)
         model_ids(m < Ew) = 2;
         model_ids(m > Ed) = 1;
     end
-    
-    rlags(k+1) = 1.0 / (5 * 3600);
     
     % select appropriate integration method (small change -> big errors in
     % the standard solution)
@@ -117,10 +113,10 @@ function Jm_ext = moisture_tangent_model_ext(Tk, Ew, Ed, m_ext, r, dt)
     end
     
     % the equilibrium constants 
-%    Jm_ext(k+1, k+1) = 1.0;
-    if(change(k+1) > 0.01)
-        Jm_ext(k+1,k+1) = exp(-change(k+1));
-    else
-        Jm_ext(k+1,k+1) = 1.0 - change(k+1) * (1 - 0.5 * change(k+1));
-    end
+    Jm_ext(k+1, k+1) = 1.0;
+%     if(change(k+1) > 0.01)
+%         Jm_ext(k+1,k+1) = exp(-change(k+1));
+%     else
+%         Jm_ext(k+1,k+1) = 1.0 - change(k+1) * (1 - 0.5 * change(k+1));
+%     end
     Jm_ext(k+2, k+2) = 1.0;

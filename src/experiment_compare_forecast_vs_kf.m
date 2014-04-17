@@ -1,14 +1,16 @@
 
-year = '2013';
+year = '2012';
 t_fcast = 3*24;
 
-[errs1,aerrs1] = forecast_ability_station_data(year,2,t_fcast,1);
-drawnow;
+% [err_ekf1,err_ukf1,err_nf1] = forecast_ability_station_data(year,2,t_fcast,1);
+% drawnow;
+
 % [errs2,aerrs2] = forecast_ability_station_data(year,7,t_fcast,1);
 % drawnow;
 % [errs3,aerrs3] = forecast_ability_station_data(year,13,t_fcast,1);
 % drawnow;
-[errs4,aerrs4] = forecast_ability_station_data(year,25,t_fcast,1);
+
+[err_ekf4,err_ukf4,err_nf4] = forecast_ability_station_data(year,25,t_fcast,1);
 drawnow;
 
 % [errs5,aerrs5] = forecast_ability_station_data(year,6,t_fcast,2);

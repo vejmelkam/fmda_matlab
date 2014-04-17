@@ -4,9 +4,9 @@
 %  This script runs the extended moisture model for one spatial point
 %
 
-function run_moisture_model_ext(station,yr)
+function [sd,m_t,m_p]=run_moisture_model_ext(station,yr)
     % Load station data
-    sd = load_station_data(station,yr,[100,270]);
+    sd = load_station_data(station,yr);
     Ed = sd.ed;
     Ew = sd.ew;
     sd.tdays = sd.tdays - datenum(2012,1,1);
@@ -33,11 +33,8 @@ function run_moisture_model_ext(station,yr)
         Ed2 = (Ed(i)+Ed(i-1))/2;
         Ew2 = (Ew(i)+Ew(i-1))/2;
 
-        m_new = moisture_model_ext([1,10,100]',Ed2,Ew2,m,sd.rain(i),dt,1e10);
-        m_t(i, :) = m_new;
-        m = m_new;
-        
-        m_p(i,:) = moisture_model_ext2([1,10,100]',Ed2,Ew2,m_p(i-1,:)',sd.rain(i),dt,1e10,0.6,2,0.04,9);
+        m_t(i, :) = moisture_model_ext([1,10,100]',Ed2,Ew2,m_t(i-1,:)',sd.rain(i),dt);
+        m_p(i,:) = moisture_model_ext2([1,10,100]',Ed2,Ew2,m_p(i-1,:)',sd.rain(i),dt,0.6,2,0.04,7);
     end
 
     f = figure();

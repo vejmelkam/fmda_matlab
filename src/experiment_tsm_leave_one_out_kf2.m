@@ -47,15 +47,17 @@ function out = experiment_tsm_leave_one_out_kf2(station_start,station_skip,year,
     for z=station_start:station_skip:length(S)
         Ts = 120:1/24:min(270,max_tday);
         sts_per_time = zeros(numel(Ts),1);
-        loo_ndx  = z;
-        loo_tgt  = zeros(numel(Ts),1);
-        loo_tsmc = zeros(numel(Ts),1);
-        loo_tsm  = zeros(numel(Ts),1);
-        loo_tm   = zeros(numel(Ts),1);
-        loo_var  = zeros(numel(Ts),1);
-        loo_varc = zeros(numel(Ts),1);
-        betas    = zeros(numel(Ts),1);
-        betasc   = zeros(numel(Ts),1);
+        loo_ndx      = z;
+        loo_tgt      = zeros(numel(Ts),1);
+        loo_tsmc     = zeros(numel(Ts),1);
+        loo_tsm      = zeros(numel(Ts),1);
+        loo_mod      = zeros(numel(Ts),1);
+        loo_mod_var  = zeros(numel(Ts),1);
+        loo_tm       = zeros(numel(Ts),1);
+        loo_var      = zeros(numel(Ts),1);
+        loo_varc     = zeros(numel(Ts),1);
+        betas        = zeros(numel(Ts),1);
+        betasc       = zeros(numel(Ts),1);
         station_code = sds{z}.stid;
         fprintf('Leaving out station %d: %s\n', z,station_code);
 
@@ -223,6 +225,7 @@ function out = experiment_tsm_leave_one_out_kf2(station_start,station_skip,year,
                     warning('XSXc is badly conditioned!');
                     [X,Z,G]
                 end
+                
                 % do the following (LOO testing) only if the left-out stations
                 % actually has at least valid weather observations here
                 % fm10 can still be unavailable, in which case loo_tgt(iter_ndx)
@@ -241,7 +244,7 @@ function out = experiment_tsm_leave_one_out_kf2(station_start,station_skip,year,
                     loo_varc(iter_ndx) = sigma2c + y_loo' * (XSXc\y_loo);
                 else
                     loo_tgt(iter_ndx) = nan;
-                end
+                end                
 
                 % find regressors for all included stations
                 for o=1:Nst
@@ -282,6 +285,17 @@ function out = experiment_tsm_leave_one_out_kf2(station_start,station_skip,year,
                 if(any(ms(:,1:3) < 0))
                     warning('negative moisture post-assimilation');
                     ms
+                end
+                
+                % do the following (LOO testing) only if the left-out stations
+                % actually has at least valid weather observations here
+                % fm10 can still be unavailable, in which case loo_tgt(iter_ndx)
+                % becomes a nan
+                if(~isempty(loo_in_st))
+                    loo_mod(iter_ndx) = ms(loo_ndx,2);
+                    loo_mod_var(iter_ndx) = P(loo_ndx,2,2);
+                else
+                    loo_tgt(iter_ndx) = nan;
                 end
                 
                 % we have had an assimilation
@@ -382,13 +396,17 @@ function out = experiment_tsm_leave_one_out_kf2(station_start,station_skip,year,
         valids = find(isfinite(loo_tgt));
         Nt = length(valids);
         fprintf('\n\n*** report ***\n');
-        fprintf('Station: %s LS/MAPE: %g  LS/MSE: %g  CLS/MAPE: %g   CLS/MSE: %g  convergence failures: %d\n', ...
-                station_code, norm(loo_tgt(valids)-loo_tsm(valids),1)/Nt, norm(loo_tgt(valids)-loo_tsm(valids),2)/Nt, ...
-                norm(loo_tgt(valids)-loo_tsmc(valids),1)/Nt, norm(loo_tgt(valids)-loo_tsmc(valids),2)/Nt, conv_failures);
+        fprintf('Station: %s MOD/MAPE: %g LS/MAPE: %g  CLS/MAPE: %g  convergence failures: %d\n', ...
+                station_code, norm(loo_tgt(valids)-loo_mod(valids),1)/Nt, ...
+                norm(loo_tgt(valids)-loo_tsm(valids),1)/Nt, ...
+                norm(loo_tgt(valids)-loo_tsmc(valids),1)/Nt, ...,
+                conv_failures);
         
         % dump the results to file
         sdsz = sds{z};
-        save([station_code,'_',years,'_tsm2_loo_',filter_suffix,'.mat'],'loo_tm','loo_tsm','loo_tsmc','loo_tgt','betas', 'betasc','sdsz','loo_var','loo_varc');
+        save([station_code,'_',years,'_tsm2_loo_',filter_suffix,'.mat'],...
+            'loo_tm','loo_tsm','loo_tsmc','loo_tgt','loo_mod','loo_mod_var',...
+            'betas', 'betasc','sdsz','loo_var','loo_varc');
 
     end
 end
